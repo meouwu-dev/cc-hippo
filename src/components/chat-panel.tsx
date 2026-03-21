@@ -449,7 +449,7 @@ export default function ChatPanel({
                       {msg.role === 'user' ? 'You' : 'Claude'}
                     </div>
                     {msg.thinking && <ThinkingBlock content={msg.thinking} />}
-                    <div className="prose prose-invert whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">
+                    <div className="prose prose-invert break-words text-[13px] leading-relaxed text-foreground">
                       {msg.content
                         ? parseContentWithChoices(msg.content).map((part, i) =>
                             part.type === 'text' ? (
