@@ -25,11 +25,19 @@ export type StreamStatus =
   | { phase: "responding" }
   | { phase: "error"; message: string };
 
-interface UseChatOptions {
-  onFileCreated?: (file: ArtifactFile) => void;
+export interface ArtifactEdge {
+  source: string;
+  target: string;
+  kind?: string;
 }
 
-export function useChat({ onFileCreated }: UseChatOptions = {}) {
+interface UseChatOptions {
+  projectId: string;
+  onFileCreated?: (file: ArtifactFile) => void;
+  onEdgeCreated?: (edge: ArtifactEdge) => void;
+}
+
+export function useChat({ projectId, onFileCreated, onEdgeCreated }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [status, setStatus] = useState<StreamStatus>({ phase: "idle" });
@@ -38,26 +46,34 @@ export function useChat({ onFileCreated }: UseChatOptions = {}) {
   const abortRef = useRef<AbortController | null>(null);
   const onFileCreatedRef = useRef(onFileCreated);
   onFileCreatedRef.current = onFileCreated;
+  const onEdgeCreatedRef = useRef(onEdgeCreated);
+  onEdgeCreatedRef.current = onEdgeCreated;
 
   // Load from IndexedDB on mount
   useEffect(() => {
     Promise.all([
-      idbGet<ChatMessage[]>("messages"),
-      idbGet<ArtifactFile[]>("artifacts"),
+      idbGet<ChatMessage[]>(`messages-${projectId}`),
+      idbGet<ArtifactFile[]>(`artifacts-${projectId}`),
     ]).then(([msgs, arts]) => {
       if (msgs) setMessages(msgs);
       if (arts) setArtifacts(arts);
       setLoaded(true);
     });
-  }, []);
+  }, [projectId]);
 
-  const persistMessages = useCallback((msgs: ChatMessage[]) => {
-    idbSet("messages", msgs);
-  }, []);
+  const persistMessages = useCallback(
+    (msgs: ChatMessage[]) => {
+      idbSet(`messages-${projectId}`, msgs);
+    },
+    [projectId],
+  );
 
-  const persistArtifacts = useCallback((arts: ArtifactFile[]) => {
-    idbSet("artifacts", arts);
-  }, []);
+  const persistArtifacts = useCallback(
+    (arts: ArtifactFile[]) => {
+      idbSet(`artifacts-${projectId}`, arts);
+    },
+    [projectId],
+  );
 
   const sendMessage = useCallback(
     async (
@@ -89,18 +105,17 @@ export function useChat({ onFileCreated }: UseChatOptions = {}) {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const history = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // First message = no prior messages in this session
+      const isFirstMessage = messages.length === 0;
 
       try {
         const res = await chatStream({
           data: {
             message: text,
-            history,
+            isFirstMessage,
             model: opts.model,
             effort: opts.effort,
+            projectId,
           },
           signal: controller.signal,
         });
@@ -202,6 +217,14 @@ export function useChat({ onFileCreated }: UseChatOptions = {}) {
                 onFileCreatedRef.current?.(file);
               }
 
+              if (data.type === "edge") {
+                onEdgeCreatedRef.current?.({
+                  source: data.source,
+                  target: data.target,
+                  kind: data.kind,
+                });
+              }
+
               if (data.type === "error") {
                 setStatus({ phase: "error", message: data.message });
               }
@@ -253,9 +276,9 @@ export function useChat({ onFileCreated }: UseChatOptions = {}) {
   const clearHistory = useCallback(() => {
     setMessages([]);
     setArtifacts([]);
-    idbDelete("messages");
-    idbDelete("artifacts");
-  }, []);
+    idbDelete(`messages-${projectId}`);
+    idbDelete(`artifacts-${projectId}`);
+  }, [projectId]);
 
   return {
     messages,

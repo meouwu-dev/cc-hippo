@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { NodeResizer } from "@xyflow/react";
+import { NodeResizer, Handle, Position } from "@xyflow/react";
 import Markdown from "react-markdown";
 import { X, ExternalLink, Download } from "lucide-react";
 import type { ArtifactNodeData } from "../hooks/useCanvasNodes.js";
@@ -37,6 +37,8 @@ function ArtifactNodeInner({
 
   return (
     <>
+      <Handle type="target" position={Position.Left} className="artifact-handle" />
+      <Handle type="source" position={Position.Right} className="artifact-handle" />
       <NodeResizer
         minWidth={280}
         minHeight={200}

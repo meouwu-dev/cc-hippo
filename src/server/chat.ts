@@ -2,9 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 
 interface ChatInput {
   message: string;
-  history?: { role: string; content: string }[];
+  isFirstMessage: boolean;
   model?: string;
   effort?: string;
+  projectId: string;
 }
 
 export const chatStream = createServerFn({ method: "POST" })
@@ -15,10 +16,12 @@ export const chatStream = createServerFn({ method: "POST" })
     const fs = await import("node:fs");
     const { fileURLToPath } = await import("node:url");
 
+    const { getAllEdges, getOrCreateSessionId } = await import("../mcp/db.js");
+
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const projectRoot = path.resolve(__dirname, "../..");
     const outputDir = path.resolve(projectRoot, "output");
-    const skillDir = path.resolve(projectRoot, "../ui-design-system");
+    const skillDir = path.resolve(projectRoot, "skills/ui-design-system");
 
     // Debug logging
     const skillExists = fs.existsSync(skillDir);
@@ -37,8 +40,10 @@ export const chatStream = createServerFn({ method: "POST" })
     }
     fs.mkdirSync(outputDir, { recursive: true });
 
-    const { message, history, model, effort } = data;
-    console.log(`[chat] Request: model=${model || "default"}, effort=${effort || "default"}, msg="${message.slice(0, 80)}..."`);
+    const { message, isFirstMessage, model, effort } = data;
+    console.log(`[chat] Request: model=${model || "default"}, effort=${effort || "default"}, first=${isFirstMessage}, msg="${message.slice(0, 80)}..."`);
+
+    const sessionId = getOrCreateSessionId(data.projectId);
 
     const systemInstruction = [
       `You are a UI design system assistant working inside "Design Preview", a canvas-based design tool.`,
@@ -50,24 +55,75 @@ export const chatStream = createServerFn({ method: "POST" })
       `- HTML files should be self-contained (inline CSS/JS) so they render in an iframe preview.`,
       `- Always create files — the user sees your work as artifacts on a canvas, not as chat text.`,
       `- NEVER mention the output directory, file paths, or tell the user to "see it on the canvas". Files you create automatically appear as artifacts — the user already sees them. Just describe what you created and why.`,
+      ``,
+      `ARTIFACT & RELATIONSHIP TRACKING (MCP tools):`,
+      `- After writing each file, call saveArtifact to register it with its type:`,
+      `  - "requirement" for requirement docs, specs, or constraints`,
+      `  - "design" for design documents, style guides, or design specs`,
+      `  - "preview" for HTML preview files`,
+      `  - "component" for reusable components`,
+      `  - "other" for anything else`,
+      `- After saving artifacts, call linkArtifacts to declare relationships between them:`,
+      `  - "references" when one doc references another`,
+      `  - "implements" when a preview implements a design or requirement`,
+      `  - "derives" when one artifact is derived from another`,
+      `  - "extends" when one artifact extends another`,
+      `- Call getArtifacts at the start to see what already exists so you can build on previous work.`,
+      `- ALWAYS save artifacts and create links — this is how the canvas shows relationships between your work.`,
+      ``,
+      `ASKING THE USER QUESTIONS (MANDATORY FORMAT):`,
+      `When you present options or ask the user to choose between alternatives, you MUST use this exact format:`,
+      ``,
+      `[CHOICE]`,
+      `{"question": "Your question here", "options": ["Option A", "Option B", "Option C"]}`,
+      `[/CHOICE]`,
+      ``,
+      `IMPORTANT: The app renders [CHOICE] blocks as clickable buttons. The user clicks a button and their selection is sent automatically.`,
+      `You MUST use [CHOICE] blocks instead of numbered lists or bullet points when presenting options.`,
+      `NEVER present options as markdown lists — always use [CHOICE] blocks.`,
+      `Keep option text short (under 50 chars). You can add context before the [CHOICE] block.`,
     ].join("\n");
 
-    const historyText = (history || [])
-      .map((m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`)
-      .join("\n\n");
+    // First message: send system instruction with the message
+    // Subsequent messages: use --continue to resume session, just send the new message
+    const prompt = isFirstMessage
+      ? `${systemInstruction}\n\n${message}`
+      : message;
 
-    const prompt = historyText
-      ? `${systemInstruction}\n\n${historyText}\n\nHuman: ${message}`
-      : `${systemInstruction}\n\n${message}`;
+    // Generate MCP config for the seal server
+    const dataDir = path.resolve(projectRoot, "data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const mcpConfigPath = path.resolve(dataDir, "mcp-config.json");
+    const mcpConfig = {
+      mcpServers: {
+        seal: {
+          command: "npx",
+          args: ["tsx", path.resolve(projectRoot, "src/mcp/server.ts")],
+        },
+      },
+    };
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
 
     const args = [
       "-p",
       prompt,
       "--output-format",
       "stream-json",
+      "--mcp-config",
+      mcpConfigPath,
       "--allowedTools",
-      "Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*)",
+      "Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships",
     ];
+
+    if (isFirstMessage) {
+      // Create a new session with our known ID
+      args.push("--session-id", sessionId);
+    } else {
+      // Resume the existing session
+      args.push("--resume", sessionId);
+    }
 
     if (skillExists) {
       args.push("--add-dir", skillDir);
@@ -169,7 +225,7 @@ export const chatStream = createServerFn({ method: "POST" })
 
         const claude = spawn("claude", args, {
           stdio: ["ignore", "pipe", "pipe"],
-          env: { ...process.env },
+          env: { ...process.env, SEAL_PROJECT_ID: data.projectId },
         });
 
         console.log(`[chat] Claude spawned, pid=${claude.pid}`);
@@ -214,6 +270,22 @@ export const chatStream = createServerFn({ method: "POST" })
               // ignore
             }
           }
+
+          // Read relationships from SQLite (created by MCP server)
+          try {
+            const edges = getAllEdges(data.projectId);
+            for (const edge of edges) {
+              send({
+                type: "edge",
+                source: edge.source_path,
+                target: edge.target_path,
+                kind: edge.kind,
+              });
+            }
+          } catch (err) {
+            console.error("[chat] Failed to read edges from SQLite:", err);
+          }
+
           send({ type: "done", code, signal });
           controller.close();
         });

@@ -62,24 +62,51 @@ html, body, #app {
 }
 
 .chat-panel[data-collapsed="true"] {
-  max-height: none;
+  max-height: fit-content;
   resize: none;
+}
+
+.chat-collapsed-island {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-collapsed-island .chat-input-area {
+  border-top: none;
+  padding: 0;
+}
+
+.chat-collapsed-island .chat-textarea {
+  font-size: 12px;
+}
+
+.chat-collapsed-island .chat-status {
+  margin: 0;
+  padding: 4px 0;
+  font-size: 11px;
 }
 
 .chat-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
   flex-shrink: 0;
+  gap: 8px;
 }
 
-.chat-title {
+.chat-project-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-project-select {
+  flex: 1;
   font-weight: 600;
-  font-size: 13px;
-  color: var(--text-bright);
 }
 
 .chat-header-controls {
@@ -300,6 +327,50 @@ html, body, #app {
   font-weight: 500;
 }
 
+/* Choice blocks */
+.chat-choice-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 8px;
+}
+
+.chat-choice-question {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 8px;
+}
+
+.chat-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-choice-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms;
+}
+
+.chat-choice-btn:hover:not(:disabled) {
+  background: rgba(129, 140, 248, 0.15);
+  border-color: rgba(129, 140, 248, 0.4);
+  color: var(--text-bright);
+}
+
+.chat-choice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Input */
 .chat-input-area {
   display: flex;
@@ -356,6 +427,20 @@ html, body, #app {
 
 .chat-send-btn:not(:disabled):hover {
   opacity: 0.85;
+}
+
+/* ---- Connection Handles ---- */
+.artifact-handle {
+  width: 12px !important;
+  height: 12px !important;
+  background: rgba(129, 140, 248, 0.5) !important;
+  border: 2px solid var(--bg-surface) !important;
+  transition: background 200ms, transform 200ms;
+}
+
+.artifact-handle:hover {
+  background: rgba(129, 140, 248, 1) !important;
+  transform: scale(1.3);
 }
 
 /* ---- Artifact Nodes ---- */

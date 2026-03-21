@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import Markdown from "react-markdown";
 import {
   Send,
   Square,
@@ -9,14 +10,19 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { ChatMessage, ArtifactFile, StreamStatus } from "../hooks/useChat.js";
+import type { Project } from "../hooks/useProject.js";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   status: StreamStatus;
+  projects: Project[];
+  currentProjectId: string;
+  onSwitchProject: (id: string) => void;
+  onCreateProject: (name: string) => void;
+  onDeleteProject: (id: string) => void;
   onSend: (text: string, opts: { model?: string; effort?: string }) => void;
   onStop: () => void;
-  onClear: () => void;
   onArtifactClick: (file: ArtifactFile) => void;
 }
 
@@ -101,13 +107,100 @@ function ThinkingBlock({ content }: { content: string }) {
   );
 }
 
+interface ChoiceData {
+  question: string;
+  options: string[];
+}
+
+const CHOICE_RE = /\[CHOICE\]\s*([\s\S]*?)\s*\[\/CHOICE\]/g;
+
+function parseContentWithChoices(content: string) {
+  const parts: ({ type: "text"; text: string } | { type: "choice"; data: ChoiceData })[] = [];
+  let lastIndex = 0;
+
+  for (const match of content.matchAll(CHOICE_RE)) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", text: content.slice(lastIndex, match.index) });
+    }
+    try {
+      const data = JSON.parse(match[1]) as ChoiceData;
+      if (data.question && Array.isArray(data.options)) {
+        parts.push({ type: "choice", data });
+      }
+    } catch {
+      parts.push({ type: "text", text: match[0] });
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push({ type: "text", text: content.slice(lastIndex) });
+  }
+
+  // Fallback: detect markdown option lists that should have been [CHOICE] blocks
+  // Pattern: 3+ lines starting with bold text (numbered or bulleted)
+  if (!content.includes("[CHOICE]")) {
+    const OPTION_RE = /^(?:\d+\.\s+|\*\s+|-\s+)\*\*(.+?)\*\*/gm;
+    const options = [...content.matchAll(OPTION_RE)].map((m) => m[1]);
+    if (options.length >= 3) {
+      // Find where the list starts to split text vs choices
+      const firstMatch = content.match(OPTION_RE);
+      if (firstMatch) {
+        const listStart = content.indexOf(firstMatch[0]);
+        const textBefore = content.slice(0, listStart).trim();
+        // Extract question from text before the list (last non-empty line)
+        const lines = textBefore.split("\n").filter((l) => l.trim());
+        const question = lines[lines.length - 1]?.replace(/[*#]/g, "").trim() || "Choose an option:";
+        return [
+          ...(textBefore ? [{ type: "text" as const, text: textBefore }] : []),
+          { type: "choice" as const, data: { question, options } },
+        ];
+      }
+    }
+  }
+
+  return parts;
+}
+
+function ChoiceBlock({
+  data,
+  onSelect,
+  disabled,
+}: {
+  data: ChoiceData;
+  onSelect: (option: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="chat-choice-block">
+      <div className="chat-choice-question">{data.question}</div>
+      <div className="chat-choice-options">
+        {data.options.map((opt) => (
+          <button
+            key={opt}
+            className="chat-choice-btn"
+            onClick={() => onSelect(opt)}
+            disabled={disabled}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ChatPanel({
   messages,
   isStreaming,
   status,
+  projects,
+  currentProjectId,
+  onSwitchProject,
+  onCreateProject,
+  onDeleteProject,
   onSend,
   onStop,
-  onClear,
   onArtifactClick,
 }: ChatPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -140,7 +233,41 @@ export default function ChatPanel({
   return (
     <div className="chat-panel" data-collapsed={collapsed}>
       <div className="chat-header">
-        <span className="chat-title">Chat</span>
+        <div className="chat-project-bar">
+          <select
+            value={currentProjectId}
+            onChange={(e) => {
+              if (e.target.value === '__new__') {
+                const name = window.prompt('Project name:')
+                if (name?.trim()) onCreateProject(name.trim())
+              } else {
+                onSwitchProject(e.target.value)
+              }
+            }}
+            className="chat-select chat-project-select"
+            title="Project"
+          >
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            <option value="__new__">+ New Project...</option>
+          </select>
+          {projects.length > 1 && (
+            <button
+              onClick={() => {
+                if (window.confirm('Delete this project and all its data?')) {
+                  onDeleteProject(currentProjectId)
+                }
+              }}
+              className="chat-icon-btn"
+              title="Delete project"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
         <div className="chat-header-controls">
           <select
             value={model}
@@ -167,13 +294,6 @@ export default function ChatPanel({
             ))}
           </select>
           <button
-            onClick={onClear}
-            className="chat-icon-btn"
-            title="Clear history"
-          >
-            <Trash2 size={14} />
-          </button>
-          <button
             onClick={() => setCollapsed((c) => !c)}
             className="chat-icon-btn"
             title={collapsed ? "Expand" : "Collapse"}
@@ -183,7 +303,29 @@ export default function ChatPanel({
         </div>
       </div>
 
-      {!collapsed && (
+      {collapsed ? (
+        <div className="chat-collapsed-island">
+          {isStreaming && <StatusIndicator status={status} />}
+          <div className="chat-input-area">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe what to design..."
+              className="chat-textarea"
+              rows={1}
+              disabled={isStreaming}
+            />
+            <button
+              onClick={isStreaming ? onStop : handleSubmit}
+              className="chat-send-btn"
+              disabled={!isStreaming && !input.trim()}
+            >
+              {isStreaming ? <Square size={16} /> : <Send size={16} />}
+            </button>
+          </div>
+        </div>
+      ) : (
         <>
           <div className="chat-messages">
             {messages.length === 0 && (
@@ -197,8 +339,26 @@ export default function ChatPanel({
                   {msg.role === "user" ? "You" : "Claude"}
                 </div>
                 {msg.thinking && <ThinkingBlock content={msg.thinking} />}
-                <div className="chat-msg-content">
-                  {msg.content || null}
+                <div className="chat-msg-content prose prose-invert">
+                  {msg.content
+                    ? parseContentWithChoices(msg.content).map((part, i) =>
+                        part.type === "text" ? (
+                          <Markdown key={i}>{part.text}</Markdown>
+                        ) : (
+                          <ChoiceBlock
+                            key={i}
+                            data={part.data}
+                            onSelect={(opt) =>
+                              onSend(opt, {
+                                model: model || undefined,
+                                effort: effort || undefined,
+                              })
+                            }
+                            disabled={isStreaming}
+                          />
+                        ),
+                      )
+                    : null}
                 </div>
                 {msg.artifacts?.map((file) => (
                   <button
