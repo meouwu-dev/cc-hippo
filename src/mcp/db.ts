@@ -40,6 +40,7 @@ export function getDb(): Database.Database {
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name TEXT NOT NULL DEFAULT 'Page 1',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      user_renamed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -101,6 +102,16 @@ export function getDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `)
+
+  // Migrations for existing DBs
+  const pageColumns = db
+    .prepare("PRAGMA table_info('pages')")
+    .all() as { name: string }[]
+  if (!pageColumns.some((c) => c.name === 'user_renamed')) {
+    db.exec(
+      'ALTER TABLE pages ADD COLUMN user_renamed INTEGER NOT NULL DEFAULT 0',
+    )
+  }
 
   return db
 }
@@ -397,6 +408,7 @@ export interface PageRow {
   project_id: string
   name: string
   sort_order: number
+  user_renamed: number
   created_at: string
 }
 
@@ -422,9 +434,19 @@ export function getPages(projectId: string): PageRow[] {
     .all(projectId) as PageRow[]
 }
 
-export function renamePage(pageId: string, name: string): void {
+export function renamePage(
+  pageId: string,
+  name: string,
+  userRenamed?: boolean,
+): void {
   const db = getDb()
-  db.prepare('UPDATE pages SET name = ? WHERE id = ?').run(name, pageId)
+  if (userRenamed !== undefined) {
+    db.prepare(
+      'UPDATE pages SET name = ?, user_renamed = ? WHERE id = ?',
+    ).run(name, userRenamed ? 1 : 0, pageId)
+  } else {
+    db.prepare('UPDATE pages SET name = ? WHERE id = ?').run(name, pageId)
+  }
 }
 
 export function deletePage(pageId: string): void {

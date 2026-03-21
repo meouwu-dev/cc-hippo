@@ -6,6 +6,9 @@ import {
   insertEdgeByPath,
   getAllArtifacts,
   getAllEdges,
+  getPages,
+  createPage,
+  renamePage,
 } from './db.js'
 
 const projectId = process.env.SEAL_PROJECT_ID || 'default'
@@ -16,10 +19,129 @@ const server = new McpServer({
 })
 
 server.registerTool(
+  'listPages',
+  {
+    description:
+      'List all pages in the project. Use this to see what pages exist before creating artifacts or new pages. Each page represents a major feature area (e.g. "Auth Flow", "Dashboard", "Settings").',
+    inputSchema: {},
+  },
+  async () => {
+    const pages = getPages(projectId)
+    const summary = pages
+      .map(
+        (p) =>
+          `- ${p.name} (id: ${p.id})${p.user_renamed ? ' [named by user]' : ' [auto-named, can rename]'}`,
+      )
+      .join('\n')
+    return {
+      content: [
+        {
+          type: 'text',
+          text: pages.length
+            ? `${pages.length} page(s):\n${summary}`
+            : 'No pages yet.',
+        },
+      ],
+    }
+  },
+)
+
+server.registerTool(
+  'createPage',
+  {
+    description:
+      'Create a new page (canvas tab) in the project. Pages organize work by feature area, following professional design workflow (e.g. "Auth Flow", "Dashboard", "Onboarding", "Settings"). Check listPages first to avoid duplicates.',
+    inputSchema: {
+      name: z
+        .string()
+        .describe(
+          'Page name — use feature area names like "Auth Flow", "Dashboard", "Settings"',
+        ),
+    },
+  },
+  async ({ name }) => {
+    const existing = getPages(projectId)
+    const sortOrder = existing.length
+    const page = createPage(projectId, name, sortOrder)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Created page: ${page.name} (id: ${page.id})`,
+        },
+      ],
+    }
+  },
+)
+
+server.registerTool(
+  'renamePage',
+  {
+    description:
+      'Rename a page to better reflect its content. Only allowed if the user has NOT manually renamed the page — check listPages for "[named by user]" vs "[auto-named, can rename]" status. Use this to give auto-created pages meaningful names like "Auth Flow" or "Dashboard".',
+    inputSchema: {
+      pageId: z.string().describe('ID of the page to rename'),
+      name: z.string().describe('New page name'),
+    },
+  },
+  async ({ pageId, name }) => {
+    const pages = getPages(projectId)
+    const page = pages.find((p) => p.id === pageId)
+    if (!page) {
+      return {
+        content: [{ type: 'text', text: `Page not found: ${pageId}` }],
+      }
+    }
+    if (page.user_renamed) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Cannot rename: "${page.name}" was named by the user. Respect their choice.`,
+          },
+        ],
+      }
+    }
+    renamePage(pageId, name)
+    return {
+      content: [
+        { type: 'text', text: `Renamed page to: ${name}` },
+      ],
+    }
+  },
+)
+
+server.registerTool(
+  'switchPage',
+  {
+    description:
+      'Navigate the user to a specific page. Use this after creating artifacts on a page so the user can see the results. Also useful when discussing work on a specific page.',
+    inputSchema: {
+      pageId: z.string().describe('ID of the page to switch to'),
+    },
+  },
+  async ({ pageId }) => {
+    const pages = getPages(projectId)
+    const page = pages.find((p) => p.id === pageId)
+    if (!page) {
+      return {
+        content: [{ type: 'text', text: `Page not found: ${pageId}` }],
+      }
+    }
+    // The actual navigation is handled by the client intercepting this tool call
+    return {
+      content: [
+        { type: 'text', text: `Navigated user to page: ${page.name}` },
+      ],
+    }
+  },
+)
+
+server.registerTool(
   'saveArtifact',
   {
     description:
-      'Save or update an artifact in the database. Call this after writing a file to register its metadata and type.',
+      'Save or update an artifact in the database. Call this after writing a file to register its metadata and type. Specify pageId to place the artifact on a specific page — use listPages to find available pages, or createPage to make a new one.',
     inputSchema: {
       path: z.string().describe('Relative file path (e.g. "requirements.md")'),
       filename: z
@@ -30,10 +152,16 @@ server.registerTool(
         .enum(['requirement', 'design', 'preview', 'component', 'other'])
         .default('other')
         .describe('Artifact type'),
+      pageId: z
+        .string()
+        .optional()
+        .describe(
+          'ID of the page to place this artifact on. If omitted, uses the default page.',
+        ),
     },
   },
-  async ({ path, filename, content, type }) => {
-    upsertArtifact(projectId, path, filename, content, type)
+  async ({ path, filename, content, type, pageId }) => {
+    upsertArtifact(projectId, path, filename, content, type, pageId)
     return {
       content: [{ type: 'text', text: `Saved artifact: ${path} (${type})` }],
     }

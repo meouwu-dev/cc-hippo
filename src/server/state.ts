@@ -118,8 +118,18 @@ export const renamePageFn = createServerFn({ method: 'POST' })
   .inputValidator((input: { pageId: string; name: string }) => input)
   .handler(async ({ data }) => {
     const { renamePage } = await import('../mcp/db.js')
-    renamePage(data.pageId, data.name)
+    renamePage(data.pageId, data.name, true)
     return { ok: true }
+  })
+
+export const getArtifactPageFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: { projectId: string; artifactPath: string }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { getArtifactByPath } = await import('../mcp/db.js')
+    const artifact = getArtifactByPath(data.projectId, data.artifactPath)
+    return { pageId: artifact?.page_id ?? null }
   })
 
 // ---- Conversations ----

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -24,6 +24,7 @@ import {
   createPageFn,
   deletePageFn,
   renamePageFn,
+  getArtifactPageFn,
 } from '../server/state.js'
 import { Plus, X, Check, Trash2 } from 'lucide-react'
 import { Button } from '../components/ui/button.js'
@@ -103,6 +104,105 @@ function CanvasApp({
   const [creatingProject, setCreatingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
 
+  const {
+    conversations,
+    currentConversationId,
+    currentConversation,
+    loading: convLoading,
+    switchConversation,
+    createConversation,
+    deleteConversation,
+    updateSettings,
+  } = useConversation(projectId)
+
+  // Refs that CanvasPage populates with canvas-specific callbacks
+  const fileCreatedRef = useRef<((file: ArtifactFile) => void) | undefined>(
+    undefined,
+  )
+  const edgeCreatedRef = useRef<
+    | ((edge: { source: string; target: string; kind?: string }) => void)
+    | undefined
+  >(undefined)
+  const batchCreatedRef = useRef<
+    ((files: ArtifactFile[]) => void) | undefined
+  >(undefined)
+
+  // Stable wrappers that delegate to the current page's callbacks
+  const onFileCreated = useCallback((file: ArtifactFile) => {
+    fileCreatedRef.current?.(file)
+  }, [])
+  const onEdgeCreated = useCallback(
+    (edge: { source: string; target: string; kind?: string }) => {
+      edgeCreatedRef.current?.(edge)
+    },
+    [],
+  )
+  const onBatchCreated = useCallback((files: ArtifactFile[]) => {
+    batchCreatedRef.current?.(files)
+  }, [])
+  const onSwitchPage = useCallback(
+    (pageId: string) => {
+      setCurrentPageId(pageId)
+      // Also reload pages in case AI created it just now
+      loadPages({ data: { projectId } }).then((loaded) => {
+        setPages((prev) => {
+          const prevIds = new Set(prev.map((p) => p.id))
+          const hasNew = (loaded as PageInfo[]).some((p) => !prevIds.has(p.id))
+          if (hasNew) return loaded as PageInfo[]
+          // Also update names (AI may have renamed)
+          const namesChanged = (loaded as PageInfo[]).some(
+            (p) => prev.find((pp) => pp.id === p.id)?.name !== p.name,
+          )
+          return namesChanged ? (loaded as PageInfo[]) : prev
+        })
+      })
+    },
+    [projectId],
+  )
+
+  // useChat lives here — survives page switches
+  const { messages, isStreaming, status, usage, sendMessage: rawSendMessage, stop } = useChat({
+    projectId,
+    conversationId: currentConversationId ?? '',
+    onFileCreated,
+    onEdgeCreated,
+    onBatchCreated,
+    onSwitchPage,
+  })
+
+  // Wrap sendMessage to inject current page context (like IDE file context)
+  const sendMessage = useCallback(
+    (text: string, opts: { model?: string; effort?: string } = {}) => {
+      const currentPage = pages.find((p) => p.id === currentPageId)
+      return rawSendMessage(text, {
+        ...opts,
+        currentPageId,
+        currentPageName: currentPage?.name,
+      })
+    },
+    [rawSendMessage, pages, currentPageId],
+  )
+
+  // Pending focus: when clicking an artifact in chat, navigate to its page then focus
+  const [pendingFocusPath, setPendingFocusPath] = useState<string | null>(null)
+
+  const handleArtifactClick = useCallback(
+    async (file: ArtifactFile) => {
+      const { pageId: artifactPageId } = await getArtifactPageFn({
+        data: { projectId, artifactPath: file.path },
+      })
+      if (artifactPageId && artifactPageId !== currentPageId) {
+        // Different page — switch and queue focus
+        setPendingFocusPath(file.path)
+        setCurrentPageId(artifactPageId)
+      } else {
+        // Same page — just focus the node directly
+        setPendingFocusPath(file.path)
+      }
+    },
+    [projectId, currentPageId],
+  )
+
   // Load pages on mount
   useEffect(() => {
     loadPages({ data: { projectId } }).then((loaded) => {
@@ -112,6 +212,21 @@ function CanvasApp({
       }
     })
   }, [projectId])
+
+  // Reload pages when streaming ends — AI may have created new pages via MCP
+  const prevStreamingRef = useRef(false)
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming) {
+      loadPages({ data: { projectId } }).then((loaded) => {
+        setPages((prev) => {
+          const prevIds = new Set(prev.map((p) => p.id))
+          const hasNew = (loaded as PageInfo[]).some((p) => !prevIds.has(p.id))
+          return hasNew ? (loaded as PageInfo[]) : prev
+        })
+      })
+    }
+    prevStreamingRef.current = isStreaming
+  }, [isStreaming, projectId])
 
   const handleCreatePage = useCallback(async () => {
     const name = `Page ${pages.length + 1}`
@@ -342,11 +457,34 @@ function CanvasApp({
           )}
         </div>
       </div>
-      <CanvasPage
-        key={`${projectId}-${currentPageId}`}
-        projectId={projectId}
-        pageId={currentPageId}
-      />
+      {convLoading || !currentConversationId || !currentConversation ? (
+        <div className="flex-1" />
+      ) : (
+        <CanvasPage
+          key={`${projectId}-${currentPageId}`}
+          projectId={projectId}
+          pageId={currentPageId}
+          fileCreatedRef={fileCreatedRef}
+          edgeCreatedRef={edgeCreatedRef}
+          batchCreatedRef={batchCreatedRef}
+          messages={messages}
+          isStreaming={isStreaming}
+          status={status}
+          usage={usage}
+          sendMessage={sendMessage}
+          stop={stop}
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          currentConversation={currentConversation}
+          onSwitchConversation={switchConversation}
+          onCreateConversation={createConversation}
+          onDeleteConversation={deleteConversation}
+          onUpdateSettings={updateSettings}
+          onArtifactClick={handleArtifactClick}
+          pendingFocusPath={pendingFocusPath}
+          onClearPendingFocus={() => setPendingFocusPath(null)}
+        />
+      )}
     </div>
   )
 }
@@ -354,20 +492,59 @@ function CanvasApp({
 interface CanvasPageProps {
   projectId: string
   pageId: string
+  fileCreatedRef: React.RefObject<
+    ((file: ArtifactFile) => void) | undefined
+  >
+  edgeCreatedRef: React.RefObject<
+    | ((edge: { source: string; target: string; kind?: string }) => void)
+    | undefined
+  >
+  batchCreatedRef: React.RefObject<
+    ((files: ArtifactFile[]) => void) | undefined
+  >
+  messages: ReturnType<typeof useChat>['messages']
+  isStreaming: boolean
+  status: ReturnType<typeof useChat>['status']
+  usage: ReturnType<typeof useChat>['usage']
+  sendMessage: ReturnType<typeof useChat>['sendMessage']
+  stop: ReturnType<typeof useChat>['stop']
+  conversations: ReturnType<typeof useConversation>['conversations']
+  currentConversationId: string
+  currentConversation: NonNullable<
+    ReturnType<typeof useConversation>['currentConversation']
+  >
+  onSwitchConversation: ReturnType<typeof useConversation>['switchConversation']
+  onCreateConversation: ReturnType<typeof useConversation>['createConversation']
+  onDeleteConversation: ReturnType<typeof useConversation>['deleteConversation']
+  onUpdateSettings: ReturnType<typeof useConversation>['updateSettings']
+  onArtifactClick: (file: ArtifactFile) => void
+  pendingFocusPath: string | null
+  onClearPendingFocus: () => void
 }
 
-function CanvasPage({ projectId, pageId }: CanvasPageProps) {
-  const {
-    conversations,
-    currentConversationId,
-    currentConversation,
-    loading: convLoading,
-    switchConversation,
-    createConversation,
-    deleteConversation,
-    updateSettings,
-  } = useConversation(projectId)
-
+function CanvasPage({
+  projectId,
+  pageId,
+  fileCreatedRef,
+  edgeCreatedRef,
+  batchCreatedRef,
+  messages,
+  isStreaming,
+  status,
+  usage,
+  sendMessage,
+  stop,
+  conversations,
+  currentConversationId,
+  currentConversation,
+  onSwitchConversation,
+  onCreateConversation,
+  onDeleteConversation,
+  onUpdateSettings,
+  onArtifactClick,
+  pendingFocusPath,
+  onClearPendingFocus,
+}: CanvasPageProps) {
   const {
     nodes,
     edges,
@@ -381,36 +558,29 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
   } = useCanvasNodes(projectId, pageId)
   const { setCenter } = useReactFlow()
 
-  const handleFileCreated = useCallback(
-    (file: ArtifactFile) => {
-      openArtifact(file)
-    },
-    [openArtifact],
-  )
-
-  const handleEdgeCreated = useCallback(
-    (edge: { source: string; target: string; kind?: string }) => {
+  // Register canvas callbacks so useChat (in parent) can reach them
+  useEffect(() => {
+    fileCreatedRef.current = (file: ArtifactFile) => openArtifact(file)
+    edgeCreatedRef.current = (edge) =>
       addEdge(edge.source, edge.target, edge.kind)
-    },
-    [addEdge],
-  )
-
-  const handleBatchCreated = useCallback(
-    (files: ArtifactFile[]) => {
+    batchCreatedRef.current = (files: ArtifactFile[]) => {
       const dir = files[0]?.path.split('/').slice(0, -1).join('/')
       const sectionName = dir || 'Generated Files'
       openArtifactBatch(files, sectionName)
-    },
-    [openArtifactBatch],
-  )
-
-  const { messages, isStreaming, status, usage, sendMessage, stop } = useChat({
-    projectId,
-    conversationId: currentConversationId ?? '',
-    onFileCreated: handleFileCreated,
-    onEdgeCreated: handleEdgeCreated,
-    onBatchCreated: handleBatchCreated,
-  })
+    }
+    return () => {
+      fileCreatedRef.current = undefined
+      edgeCreatedRef.current = undefined
+      batchCreatedRef.current = undefined
+    }
+  }, [
+    fileCreatedRef,
+    edgeCreatedRef,
+    batchCreatedRef,
+    openArtifact,
+    addEdge,
+    openArtifactBatch,
+  ])
 
   // Listen for close-artifact events from nodes
   useEffect(() => {
@@ -427,11 +597,11 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
     [],
   )
 
-  const handleArtifactClick = useCallback(
-    (file: ArtifactFile) => {
-      openArtifact(file)
+  // Focus a node by path — used for pending focus after page switch
+  const focusNode = useCallback(
+    (artifactPath: string) => {
       requestAnimationFrame(() => {
-        const nodeId = `artifact-${file.path}`
+        const nodeId = `artifact-${artifactPath}`
         const node = nodes.find((n) => n.id === nodeId)
         if (node) {
           const w = (node.style?.width as number) || 480
@@ -443,12 +613,20 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
         }
       })
     },
-    [openArtifact, nodes, setCenter],
+    [nodes, setCenter],
   )
 
-  if (convLoading || !currentConversationId || !currentConversation) {
-    return <div className="canvas-app" />
-  }
+  // Handle pending focus from page navigation
+  useEffect(() => {
+    if (pendingFocusPath) {
+      // Small delay to let canvas data load
+      const timer = setTimeout(() => {
+        focusNode(pendingFocusPath)
+        onClearPendingFocus()
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [pendingFocusPath, focusNode, onClearPendingFocus])
 
   return (
     <>
@@ -462,19 +640,19 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
           currentConversationId={currentConversationId}
           currentModel={currentConversation.model}
           currentEffort={currentConversation.effort}
-          onSwitchConversation={switchConversation}
-          onCreateConversation={createConversation}
-          onDeleteConversation={deleteConversation}
+          onSwitchConversation={onSwitchConversation}
+          onCreateConversation={onCreateConversation}
+          onDeleteConversation={onDeleteConversation}
           onModelChange={(model: string) =>
-            updateSettings(model, currentConversation.effort)
+            onUpdateSettings(model, currentConversation.effort)
           }
           onEffortChange={(effort: string) =>
-            updateSettings(currentConversation.model, effort)
+            onUpdateSettings(currentConversation.model, effort)
           }
           usage={usage}
           onSend={sendMessage}
           onStop={stop}
-          onArtifactClick={handleArtifactClick}
+          onArtifactClick={onArtifactClick}
         />
       </div>
       <ReactFlow

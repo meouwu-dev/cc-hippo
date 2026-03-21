@@ -7,6 +7,8 @@ interface ChatInput {
   effort?: string
   projectId: string
   conversationId: string
+  currentPageId?: string
+  currentPageName?: string
 }
 
 export const chatStream = createServerFn({ method: 'POST' })
@@ -60,8 +62,20 @@ export const chatStream = createServerFn({ method: 'POST' })
       `- Always create files — the user sees your work as artifacts on a canvas, not as chat text.`,
       `- NEVER mention the output directory, file paths, or tell the user to "see it on the canvas". Files you create automatically appear as artifacts — the user already sees them. Just describe what you created and why.`,
       ``,
+      `PAGE MANAGEMENT (professional design workflow):`,
+      `- Pages are canvas tabs that organize work by feature area, like Figma pages.`,
+      `- Examples: "Auth Flow", "Dashboard", "Onboarding", "Settings", "Design System", "Exploration".`,
+      `- At the start of a design task, call listPages to see existing pages.`,
+      `- Create new pages with createPage when the work belongs to a new feature area.`,
+      `- When saving artifacts, pass the pageId to place them on the correct page.`,
+      `- Follow this professional pattern:`,
+      `  - Group related screens on the same page (e.g. login + signup + forgot password all go on "Auth Flow")`,
+      `  - Use an "Exploration" page for rough wireframes and brainstorming`,
+      `  - Use a "Design System" page for shared components and tokens`,
+      `  - Don't create a new page for every single screen — group by feature area`,
+      ``,
       `ARTIFACT & RELATIONSHIP TRACKING (MCP tools):`,
-      `- After writing each file, call saveArtifact to register it with its type:`,
+      `- After writing each file, call saveArtifact to register it with its type and pageId:`,
       `  - "requirement" for requirement docs, specs, or constraints`,
       `  - "design" for design documents, style guides, or design specs`,
       `  - "preview" for HTML preview files`,
@@ -88,11 +102,16 @@ export const chatStream = createServerFn({ method: 'POST' })
       `Keep option text short (under 50 chars). You can add context before the [CHOICE] block.`,
     ].join('\n')
 
+    // Prepend page context (like IDE file context)
+    const pageContext = data.currentPageName
+      ? `[User is viewing page: "${data.currentPageName}"${data.currentPageId ? ` (id: ${data.currentPageId})` : ''}]\n\n`
+      : ''
+
     // First message: send system instruction with the message
     // Subsequent messages: use --continue to resume session, just send the new message
     const prompt = isFirstMessage
-      ? `${systemInstruction}\n\n${message}`
-      : message
+      ? `${systemInstruction}\n\n${pageContext}${message}`
+      : `${pageContext}${message}`
 
     // Generate MCP config for the seal server
     const dataDir = path.resolve(projectRoot, 'data')
@@ -118,7 +137,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       '--mcp-config',
       mcpConfigPath,
       '--allowedTools',
-      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships',
+      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage',
     ]
 
     if (isFirstMessage) {
@@ -218,6 +237,13 @@ export const chatStream = createServerFn({ method: 'POST' })
                   content: updated,
                 })
               }
+            }
+            // Intercept switchPage MCP tool to emit page navigation event
+            if (
+              block.name === 'mcp__seal__switchPage' &&
+              input?.pageId
+            ) {
+              send({ type: 'switchPage', pageId: input.pageId })
             }
             send({ type: 'status', event: formatToolStatus(block) })
           }

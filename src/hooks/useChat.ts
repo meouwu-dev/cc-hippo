@@ -50,6 +50,7 @@ interface UseChatOptions {
   onFileCreated?: (file: ArtifactFile) => void
   onEdgeCreated?: (edge: ArtifactEdge) => void
   onBatchCreated?: (files: ArtifactFile[]) => void
+  onSwitchPage?: (pageId: string) => void
 }
 
 export function useChat({
@@ -58,6 +59,7 @@ export function useChat({
   onFileCreated,
   onEdgeCreated,
   onBatchCreated,
+  onSwitchPage,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -72,6 +74,8 @@ export function useChat({
   onEdgeCreatedRef.current = onEdgeCreated
   const onBatchCreatedRef = useRef(onBatchCreated)
   onBatchCreatedRef.current = onBatchCreated
+  const onSwitchPageRef = useRef(onSwitchPage)
+  onSwitchPageRef.current = onSwitchPage
 
   // Load from SQLite on mount / conversation switch
   useEffect(() => {
@@ -111,7 +115,15 @@ export function useChat({
   )
 
   const sendMessage = useCallback(
-    async (text: string, opts: { model?: string; effort?: string } = {}) => {
+    async (
+      text: string,
+      opts: {
+        model?: string
+        effort?: string
+        currentPageId?: string
+        currentPageName?: string
+      } = {},
+    ) => {
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -150,6 +162,8 @@ export function useChat({
             effort: opts.effort,
             projectId,
             conversationId,
+            currentPageId: opts.currentPageId,
+            currentPageName: opts.currentPageName,
           },
           signal: controller.signal,
         })
@@ -254,6 +268,10 @@ export function useChat({
                   target: data.target,
                   kind: data.kind,
                 })
+              }
+
+              if (data.type === 'switchPage') {
+                onSwitchPageRef.current?.(data.pageId as string)
               }
 
               if (data.type === 'usage') {
