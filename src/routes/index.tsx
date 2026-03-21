@@ -41,6 +41,17 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '../components/ui/tooltip.js'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '../components/ui/alert-dialog.js'
 
 interface PageInfo {
   id: string
@@ -438,29 +449,43 @@ function CanvasApp({
                 <TooltipContent>New project</TooltipContent>
               </Tooltip>
               {projects.length > 1 && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-5 shrink-0"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              'Delete this project and all its data?',
-                            )
-                          ) {
-                            onDeleteProject(projectId)
+                <AlertDialog>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <AlertDialogTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="size-5 shrink-0"
+                            />
                           }
-                        }}
-                      />
-                    }
-                  >
-                    <Trash2 size={11} />
-                  </TooltipTrigger>
-                  <TooltipContent>Delete project</TooltipContent>
-                </Tooltip>
+                        />
+                      }
+                    >
+                      <Trash2 size={11} />
+                    </TooltipTrigger>
+                    <TooltipContent>Delete project</TooltipContent>
+                  </Tooltip>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete project</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete this project and all its
+                        data.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => onDeleteProject(projectId)}
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
             </>
           )}

@@ -166,12 +166,14 @@ export interface ConversationRow {
 export function createConversation(
   projectId: string,
   name = 'Chat 1',
+  model?: string,
+  effort?: string,
 ): ConversationRow {
   const db = getDb()
   const id = crypto.randomUUID()
   db.prepare(
-    'INSERT INTO conversations (id, project_id, name) VALUES (?, ?, ?)',
-  ).run(id, projectId, name)
+    'INSERT INTO conversations (id, project_id, name, model, effort) VALUES (?, ?, ?, ?, ?)',
+  ).run(id, projectId, name, model ?? 'default', effort ?? 'default')
   return db
     .prepare('SELECT * FROM conversations WHERE id = ?')
     .get(id) as ConversationRow

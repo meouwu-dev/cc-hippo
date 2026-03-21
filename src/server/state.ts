@@ -140,10 +140,17 @@ export const loadConversations = createServerFn({ method: 'POST' })
   })
 
 export const createConversationFn = createServerFn({ method: 'POST' })
-  .inputValidator((input: { projectId: string; name?: string }) => input)
+  .inputValidator(
+    (input: {
+      projectId: string
+      name?: string
+      model?: string
+      effort?: string
+    }) => input,
+  )
   .handler(async ({ data }) => {
     const { createConversation } = await import('../mcp/db.js')
-    return createConversation(data.projectId, data.name)
+    return createConversation(data.projectId, data.name, data.model, data.effort)
   })
 
 export const deleteConversationFn = createServerFn({ method: 'POST' })

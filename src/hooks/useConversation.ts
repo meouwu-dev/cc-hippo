@@ -66,8 +66,19 @@ export function useConversation(projectId: string) {
   const createConversation = useCallback(
     async (name?: string) => {
       const label = name || `Chat ${conversations.length + 1}`
+      const lastModel = await getAppStateFn({
+        data: { key: 'last_model' },
+      })
+      const lastEffort = await getAppStateFn({
+        data: { key: 'last_effort' },
+      })
       const created = (await createConversationFn({
-        data: { projectId, name: label },
+        data: {
+          projectId,
+          name: label,
+          model: lastModel.value ?? undefined,
+          effort: lastEffort.value ?? undefined,
+        },
       })) as Conversation
       setConversations((prev) => [...prev, created])
       setCurrentConversationId(created.id)
@@ -123,8 +134,14 @@ export function useConversation(projectId: string) {
           c.id === currentConversationId ? { ...c, model, effort } : c,
         ),
       )
+      await setAppStateFn({
+        data: { key: 'last_model', value: model },
+      })
+      await setAppStateFn({
+        data: { key: 'last_effort', value: effort },
+      })
     },
-    [currentConversationId],
+    [currentConversationId, projectId],
   )
 
   return {
