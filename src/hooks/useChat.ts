@@ -295,9 +295,7 @@ export function useChat({
                 setPendingQuestions(qs)
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantMsg.id
-                      ? { ...m, questions: qs }
-                      : m,
+                    m.id === assistantMsg.id ? { ...m, questions: qs } : m,
                   ),
                 )
               }

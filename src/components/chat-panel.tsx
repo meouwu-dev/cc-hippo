@@ -173,12 +173,18 @@ function ThinkingBlock({
         setExpanded(open)
         if (open) {
           requestAnimationFrame(() => {
-            blockRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+            blockRef.current?.scrollIntoView({
+              block: 'nearest',
+              behavior: 'smooth',
+            })
           })
         }
       }}
     >
-      <div ref={blockRef} className="my-1 overflow-hidden rounded-md border bg-muted/30">
+      <div
+        ref={blockRef}
+        className="my-1 overflow-hidden rounded-md border bg-muted/30"
+      >
         <div className="flex items-center gap-1.5 px-2 py-1.5">
           <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground">
             <ChevronRight
@@ -414,7 +420,10 @@ export default function ChatPanel({
               onSubmit={(e) => {
                 e.preventDefault()
                 if (renameValue.trim()) {
-                  onRenameConversation(currentConversationId, renameValue.trim())
+                  onRenameConversation(
+                    currentConversationId,
+                    renameValue.trim(),
+                  )
                 }
                 setIsRenaming(false)
               }}

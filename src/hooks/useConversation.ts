@@ -142,15 +142,12 @@ export function useConversation(projectId: string) {
     [projectId, currentConversationId],
   )
 
-  const renameConversation = useCallback(
-    async (id: string, name: string) => {
-      await renameConversationFn({ data: { conversationId: id, name } })
-      setConversations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, name } : c)),
-      )
-    },
-    [],
-  )
+  const renameConversation = useCallback(async (id: string, name: string) => {
+    await renameConversationFn({ data: { conversationId: id, name } })
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, name } : c)),
+    )
+  }, [])
 
   const updateSettings = useCallback(
     async (model: string, effort: string) => {

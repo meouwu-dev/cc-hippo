@@ -217,9 +217,18 @@ function CanvasApp({
     autoRenamedRef.current.add(currentConversationId)
     const title = firstUserMsg.content.slice(0, 40).trim()
     if (title) {
-      renameConversation(currentConversationId, title + (firstUserMsg.content.length > 40 ? '…' : ''))
+      renameConversation(
+        currentConversationId,
+        title + (firstUserMsg.content.length > 40 ? '…' : ''),
+      )
     }
-  }, [currentConversationId, conversations, messages, isStreaming, renameConversation])
+  }, [
+    currentConversationId,
+    conversations,
+    messages,
+    isStreaming,
+    renameConversation,
+  ])
 
   // Pending focus: when clicking an artifact in chat, navigate to its page then focus
   const [pendingFocusPath, setPendingFocusPath] = useState<string | null>(null)
@@ -746,15 +755,36 @@ function CanvasPage({
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        <MiniMap
-          nodeColor={(n) =>
-            n.type === 'section'
-              ? 'rgba(129, 140, 248, 0.3)'
-              : 'rgba(255, 255, 255, 0.2)'
-          }
-          maskColor="rgba(0, 0, 0, 0.7)"
-          style={{ background: '#1a1a2e' }}
-        />
+        <div
+          className="group/minimap fixed bottom-4 right-0 z-10 flex items-end"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateX(0)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateX(calc(100% - 20px))'
+          }}
+          style={{
+            transform: 'translateX(calc(100% - 20px))',
+            transition: 'transform 0.25s ease',
+          }}
+        >
+          <div className="flex h-10 w-5 shrink-0 cursor-pointer items-center justify-center rounded-l-md bg-[#1a1a2e] text-xs text-white/60 shadow-md">
+            ‹
+          </div>
+          <MiniMap
+            nodeColor={(n) =>
+              n.type === 'section'
+                ? 'rgba(129, 140, 248, 0.3)'
+                : 'rgba(255, 255, 255, 0.2)'
+            }
+            maskColor="rgba(0, 0, 0, 0.7)"
+            style={{
+              background: '#1a1a2e',
+              position: 'relative',
+              margin: 0,
+            }}
+          />
+        </div>
       </ReactFlow>
     </>
   )

@@ -150,7 +150,12 @@ export const createConversationFn = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const { createConversation } = await import('../mcp/db.js')
-    return createConversation(data.projectId, data.name, data.model, data.effort)
+    return createConversation(
+      data.projectId,
+      data.name,
+      data.model,
+      data.effort,
+    )
   })
 
 export const deleteConversationFn = createServerFn({ method: 'POST' })
