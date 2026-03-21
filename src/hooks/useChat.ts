@@ -12,6 +12,7 @@ export interface ChatMessage {
   content: string
   thinking?: string
   artifacts?: ArtifactFile[]
+  questions?: UserQuestion[]
 }
 
 export interface ArtifactFile {
@@ -19,6 +20,12 @@ export interface ArtifactFile {
   filename: string
   version: number
   content: string
+}
+
+export interface UserQuestion {
+  question: string
+  options: string[]
+  allowCustom?: boolean
 }
 
 export type StreamStatus =
@@ -67,6 +74,9 @@ export function useChat({
   const [artifacts, setArtifacts] = useState<ArtifactFile[]>([])
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [pendingQuestions, setPendingQuestions] = useState<
+    UserQuestion[] | null
+  >(null)
   const abortRef = useRef<AbortController | null>(null)
   const onFileCreatedRef = useRef(onFileCreated)
   onFileCreatedRef.current = onFileCreated
@@ -102,6 +112,11 @@ export function useChat({
           }
         }
         if (allArtifacts.length) setArtifacts(allArtifacts)
+        // Restore pending questions if last assistant msg has unanswered questions
+        const lastMsg = msgs[msgs.length - 1] as ChatMessage | undefined
+        if (lastMsg?.role === 'assistant' && lastMsg.questions?.length) {
+          setPendingQuestions(lastMsg.questions)
+        }
       }
       setLoaded(true)
     })
@@ -270,6 +285,18 @@ export function useChat({
                 })
               }
 
+              if (data.type === 'askUser') {
+                const qs = data.questions as UserQuestion[]
+                setPendingQuestions(qs)
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? { ...m, questions: qs }
+                      : m,
+                  ),
+                )
+              }
+
               if (data.type === 'switchPage') {
                 onSwitchPageRef.current?.(data.pageId as string)
               }
@@ -277,14 +304,20 @@ export function useChat({
               if (data.type === 'usage') {
                 const u = data.usage as Record<string, number>
                 setUsage((prev) => ({
-                  duration_ms: (data.duration_ms as number) ?? prev?.duration_ms ?? 0,
-                  total_cost_usd: (data.total_cost_usd as number) ?? prev?.total_cost_usd ?? 0,
+                  duration_ms:
+                    (data.duration_ms as number) ?? prev?.duration_ms ?? 0,
+                  total_cost_usd:
+                    (data.total_cost_usd as number) ??
+                    prev?.total_cost_usd ??
+                    0,
                   input_tokens: u?.input_tokens ?? prev?.input_tokens ?? 0,
                   output_tokens: u?.output_tokens ?? prev?.output_tokens ?? 0,
                   cache_read_tokens:
                     u?.cache_read_input_tokens ?? prev?.cache_read_tokens ?? 0,
                   cache_creation_tokens:
-                    u?.cache_creation_input_tokens ?? prev?.cache_creation_tokens ?? 0,
+                    u?.cache_creation_input_tokens ??
+                    prev?.cache_creation_tokens ??
+                    0,
                 }))
               }
 
@@ -346,6 +379,18 @@ export function useChat({
     clearChatMessagesFn({ data: { conversationId } })
   }, [conversationId])
 
+  const dismissQuestions = useCallback(() => {
+    setPendingQuestions(null)
+    // Clear questions from the message so they don't reappear on refresh
+    setMessages((prev) => {
+      const next = prev.map((m) =>
+        m.questions ? { ...m, questions: undefined } : m,
+      )
+      persistMessages(next)
+      return next
+    })
+  }, [persistMessages])
+
   return {
     messages,
     isStreaming,
@@ -353,6 +398,8 @@ export function useChat({
     usage,
     artifacts,
     loaded,
+    pendingQuestions,
+    dismissQuestions,
     sendMessage,
     stop,
     clearHistory,

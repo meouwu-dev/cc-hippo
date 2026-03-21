@@ -123,9 +123,9 @@ function CanvasApp({
     | ((edge: { source: string; target: string; kind?: string }) => void)
     | undefined
   >(undefined)
-  const batchCreatedRef = useRef<
-    ((files: ArtifactFile[]) => void) | undefined
-  >(undefined)
+  const batchCreatedRef = useRef<((files: ArtifactFile[]) => void) | undefined>(
+    undefined,
+  )
 
   // Stable wrappers that delegate to the current page's callbacks
   const onFileCreated = useCallback((file: ArtifactFile) => {
@@ -161,7 +161,16 @@ function CanvasApp({
   )
 
   // useChat lives here — survives page switches
-  const { messages, isStreaming, status, usage, sendMessage: rawSendMessage, stop } = useChat({
+  const {
+    messages,
+    isStreaming,
+    status,
+    usage,
+    pendingQuestions,
+    dismissQuestions,
+    sendMessage: rawSendMessage,
+    stop,
+  } = useChat({
     projectId,
     conversationId: currentConversationId ?? '',
     onFileCreated,
@@ -483,6 +492,8 @@ function CanvasApp({
           onArtifactClick={handleArtifactClick}
           pendingFocusPath={pendingFocusPath}
           onClearPendingFocus={() => setPendingFocusPath(null)}
+          pendingQuestions={pendingQuestions}
+          dismissQuestions={dismissQuestions}
         />
       )}
     </div>
@@ -492,9 +503,7 @@ function CanvasApp({
 interface CanvasPageProps {
   projectId: string
   pageId: string
-  fileCreatedRef: React.RefObject<
-    ((file: ArtifactFile) => void) | undefined
-  >
+  fileCreatedRef: React.RefObject<((file: ArtifactFile) => void) | undefined>
   edgeCreatedRef: React.RefObject<
     | ((edge: { source: string; target: string; kind?: string }) => void)
     | undefined
@@ -520,6 +529,8 @@ interface CanvasPageProps {
   onArtifactClick: (file: ArtifactFile) => void
   pendingFocusPath: string | null
   onClearPendingFocus: () => void
+  pendingQuestions: ReturnType<typeof useChat>['pendingQuestions']
+  dismissQuestions: ReturnType<typeof useChat>['dismissQuestions']
 }
 
 function CanvasPage({
@@ -544,6 +555,8 @@ function CanvasPage({
   onArtifactClick,
   pendingFocusPath,
   onClearPendingFocus,
+  pendingQuestions,
+  dismissQuestions,
 }: CanvasPageProps) {
   const {
     nodes,
@@ -653,6 +666,8 @@ function CanvasPage({
           onSend={sendMessage}
           onStop={stop}
           onArtifactClick={onArtifactClick}
+          pendingQuestions={pendingQuestions}
+          dismissQuestions={dismissQuestions}
         />
       </div>
       <ReactFlow

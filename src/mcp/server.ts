@@ -19,6 +19,44 @@ const server = new McpServer({
 })
 
 server.registerTool(
+  'askUser',
+  {
+    description:
+      "Ask the user one or more questions with predefined options. The user will see clickable buttons for each option and can also type a custom answer. Use this whenever you need user input to decide between alternatives. The tool returns the user's answers formatted as Q&A pairs.",
+    inputSchema: {
+      questions: z
+        .array(
+          z.object({
+            question: z.string().describe('The question to ask'),
+            options: z
+              .array(z.string())
+              .describe('List of options (keep under 50 chars each)'),
+            allowCustom: z
+              .boolean()
+              .optional()
+              .default(false)
+              .describe('Whether to show a text input for custom answers'),
+          }),
+        )
+        .describe('One or more questions to ask the user'),
+    },
+  },
+  async ({ questions }) => {
+    // The actual interaction is handled by the client intercepting this tool call.
+    // The MCP tool just returns a placeholder — the server will pause claude
+    // and resume with the user's answers.
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Waiting for user to answer ${questions.length} question(s)...`,
+        },
+      ],
+    }
+  },
+)
+
+server.registerTool(
   'listPages',
   {
     description:
@@ -104,9 +142,7 @@ server.registerTool(
     }
     renamePage(pageId, name)
     return {
-      content: [
-        { type: 'text', text: `Renamed page to: ${name}` },
-      ],
+      content: [{ type: 'text', text: `Renamed page to: ${name}` }],
     }
   },
 )
@@ -130,9 +166,7 @@ server.registerTool(
     }
     // The actual navigation is handled by the client intercepting this tool call
     return {
-      content: [
-        { type: 'text', text: `Navigated user to page: ${page.name}` },
-      ],
+      content: [{ type: 'text', text: `Navigated user to page: ${page.name}` }],
     }
   },
 )

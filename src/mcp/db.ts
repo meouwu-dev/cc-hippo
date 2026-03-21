@@ -99,18 +99,26 @@ export function getDb(): Database.Database {
       content TEXT NOT NULL DEFAULT '',
       thinking TEXT,
       artifacts TEXT,
+      questions TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `)
 
   // Migrations for existing DBs
-  const pageColumns = db
-    .prepare("PRAGMA table_info('pages')")
-    .all() as { name: string }[]
+  const pageColumns = db.prepare("PRAGMA table_info('pages')").all() as {
+    name: string
+  }[]
   if (!pageColumns.some((c) => c.name === 'user_renamed')) {
     db.exec(
       'ALTER TABLE pages ADD COLUMN user_renamed INTEGER NOT NULL DEFAULT 0',
     )
+  }
+
+  const msgColumns = db.prepare("PRAGMA table_info('chat_messages')").all() as {
+    name: string
+  }[]
+  if (!msgColumns.some((c) => c.name === 'questions')) {
+    db.exec('ALTER TABLE chat_messages ADD COLUMN questions TEXT')
   }
 
   return db
@@ -441,9 +449,11 @@ export function renamePage(
 ): void {
   const db = getDb()
   if (userRenamed !== undefined) {
-    db.prepare(
-      'UPDATE pages SET name = ?, user_renamed = ? WHERE id = ?',
-    ).run(name, userRenamed ? 1 : 0, pageId)
+    db.prepare('UPDATE pages SET name = ?, user_renamed = ? WHERE id = ?').run(
+      name,
+      userRenamed ? 1 : 0,
+      pageId,
+    )
   } else {
     db.prepare('UPDATE pages SET name = ? WHERE id = ?').run(name, pageId)
   }
@@ -537,6 +547,7 @@ export interface ChatMessageRow {
   content: string
   thinking: string | null
   artifacts: string | null
+  questions: string | null
   created_at: string
 }
 
@@ -557,16 +568,18 @@ export function saveChatMessages(
     content: string
     thinking?: string
     artifacts?: unknown[]
+    questions?: unknown[]
   }[],
 ): void {
   const db = getDb()
   const upsert = db.prepare(
-    `INSERT INTO chat_messages (id, conversation_id, role, content, thinking, artifacts)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO chat_messages (id, conversation_id, role, content, thinking, artifacts, questions)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        content = excluded.content,
        thinking = excluded.thinking,
-       artifacts = excluded.artifacts`,
+       artifacts = excluded.artifacts,
+       questions = excluded.questions`,
   )
   const tx = db.transaction(() => {
     for (const msg of messages) {
@@ -577,6 +590,7 @@ export function saveChatMessages(
         msg.content,
         msg.thinking ?? null,
         JSON.stringify(msg.artifacts ?? []),
+        msg.questions ? JSON.stringify(msg.questions) : null,
       )
     }
   })

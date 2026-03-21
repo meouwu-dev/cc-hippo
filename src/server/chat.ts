@@ -89,17 +89,12 @@ export const chatStream = createServerFn({ method: 'POST' })
       `- Call getArtifacts at the start to see what already exists so you can build on previous work.`,
       `- ALWAYS save artifacts and create links — this is how the canvas shows relationships between your work.`,
       ``,
-      `ASKING THE USER QUESTIONS (MANDATORY FORMAT):`,
-      `When you present options or ask the user to choose between alternatives, you MUST use this exact format:`,
-      ``,
-      `[CHOICE]`,
-      `{"question": "Your question here", "options": ["Option A", "Option B", "Option C"]}`,
-      `[/CHOICE]`,
-      ``,
-      `IMPORTANT: The app renders [CHOICE] blocks as clickable buttons. The user clicks a button and their selection is sent automatically.`,
-      `You MUST use [CHOICE] blocks instead of numbered lists or bullet points when presenting options.`,
-      `NEVER present options as markdown lists — always use [CHOICE] blocks.`,
-      `Keep option text short (under 50 chars). You can add context before the [CHOICE] block.`,
+      `ASKING THE USER QUESTIONS:`,
+      `When you need the user to choose between alternatives, call the askUser MCP tool.`,
+      `It supports multiple questions at once — each with predefined options and an optional custom text input.`,
+      `The app renders these as interactive forms with clickable buttons. The user's answers are returned as Q&A pairs.`,
+      `NEVER present options as markdown numbered/bulleted lists — always use askUser.`,
+      `Keep option text short (under 50 chars). You can ask multiple questions in a single call.`,
     ].join('\n')
 
     // Prepend page context (like IDE file context)
@@ -137,7 +132,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       '--mcp-config',
       mcpConfigPath,
       '--allowedTools',
-      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage',
+      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__askUser mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage',
     ]
 
     if (isFirstMessage) {
@@ -243,11 +238,14 @@ export const chatStream = createServerFn({ method: 'POST' })
                 })
               }
             }
+            // Intercept askUser MCP tool to emit questions to client
+            if (block.name === 'mcp__seal__askUser' && input) {
+              const questions = (block.input as Record<string, unknown>)
+                .questions
+              send({ type: 'askUser', questions })
+            }
             // Intercept switchPage MCP tool to emit page navigation event
-            if (
-              block.name === 'mcp__seal__switchPage' &&
-              input?.pageId
-            ) {
+            if (block.name === 'mcp__seal__switchPage' && input?.pageId) {
               send({ type: 'switchPage', pageId: input.pageId })
             }
             send({ type: 'status', event: formatToolStatus(block) })

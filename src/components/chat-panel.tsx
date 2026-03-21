@@ -30,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from './ui/alert-dialog.js'
 
+import { Input } from './ui/input.js'
 import { Textarea } from './ui/textarea.js'
 import {
   Collapsible,
@@ -42,6 +43,7 @@ import type {
   ArtifactFile,
   StreamStatus,
   UsageInfo,
+  UserQuestion,
 } from '../hooks/useChat.js'
 import type { Conversation } from '../hooks/useConversation.js'
 
@@ -62,6 +64,8 @@ interface ChatPanelProps {
   onSend: (text: string, opts: { model?: string; effort?: string }) => void
   onStop: () => void
   onArtifactClick: (file: ArtifactFile) => void
+  pendingQuestions: UserQuestion[] | null
+  dismissQuestions: () => void
 }
 
 const MODELS = [
@@ -159,60 +163,78 @@ function ThinkingBlock({ content }: { content: string }) {
   )
 }
 
-interface ChoiceData {
-  question: string
-  options: string[]
-}
+function QuestionForm({
+  questions,
+  onSubmit,
+  onDismiss,
+}: {
+  questions: UserQuestion[]
+  onSubmit: (response: string) => void
+  onDismiss: () => void
+}) {
+  const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [customInputs, setCustomInputs] = useState<Record<number, string>>({})
 
-const CHOICE_RE = /\[CHOICE\]\s*([\s\S]*?)\s*\[\/CHOICE\]/g
-
-function parseContentWithChoices(content: string) {
-  const parts: (
-    | { type: 'text'; text: string }
-    | { type: 'choice'; data: ChoiceData }
-  )[] = []
-  let lastIndex = 0
-
-  for (const match of content.matchAll(CHOICE_RE)) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', text: content.slice(lastIndex, match.index) })
-    }
-    try {
-      const data = JSON.parse(match[1]) as ChoiceData
-      if (data.question && Array.isArray(data.options)) {
-        parts.push({ type: 'choice', data })
-      }
-    } catch {
-      parts.push({ type: 'text', text: match[0] })
-    }
-    lastIndex = match.index + match[0].length
+  const setAnswer = (idx: number, value: string) => {
+    setAnswers((prev) => ({ ...prev, [idx]: value }))
+    // Clear custom input when picking a predefined option
+    setCustomInputs((prev) => ({ ...prev, [idx]: '' }))
   }
 
-  if (lastIndex < content.length) {
-    parts.push({ type: 'text', text: content.slice(lastIndex) })
+  const setCustom = (idx: number, value: string) => {
+    setCustomInputs((prev) => ({ ...prev, [idx]: value }))
+    setAnswers((prev) => ({ ...prev, [idx]: value }))
   }
 
-  if (!content.includes('[CHOICE]')) {
-    const OPTION_RE = /^(?:\d+\.\s+|\*\s+|-\s+)\*\*(.+?)\*\*/gm
-    const options = [...content.matchAll(OPTION_RE)].map((m) => m[1])
-    if (options.length >= 3) {
-      const firstMatch = content.match(OPTION_RE)
-      if (firstMatch) {
-        const listStart = content.indexOf(firstMatch[0])
-        const textBefore = content.slice(0, listStart).trim()
-        const lines = textBefore.split('\n').filter((l) => l.trim())
-        const question =
-          lines[lines.length - 1]?.replace(/[*#]/g, '').trim() ||
-          'Choose an option:'
-        return [
-          ...(textBefore ? [{ type: 'text' as const, text: textBefore }] : []),
-          { type: 'choice' as const, data: { question, options } },
-        ]
-      }
-    }
+  const allAnswered = questions.every((_, i) => answers[i]?.trim())
+
+  const handleSubmit = () => {
+    const lines = questions.map(
+      (q, i) => `Q: ${q.question}  \nA: ${answers[i] || '(no answer)'}`,
+    )
+    onSubmit(lines.join('\n\n'))
+    onDismiss()
   }
 
-  return parts
+  return (
+    <div className="my-2 flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+      {questions.map((q, i) => (
+        <div key={i} className="flex flex-col gap-1.5">
+          <div className="text-xs font-semibold text-foreground">
+            {q.question}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {q.options.map((opt) => (
+              <Button
+                key={opt}
+                variant={
+                  answers[i] === opt && !customInputs[i] ? 'default' : 'outline'
+                }
+                size="sm"
+                onClick={() => setAnswer(i, opt)}
+              >
+                {opt}
+              </Button>
+            ))}
+          </div>
+          <Input
+            className="mt-1 h-7 text-xs"
+            placeholder="Or type your own..."
+            value={customInputs[i] || ''}
+            onChange={(e) => setCustom(i, e.target.value)}
+          />
+        </div>
+      ))}
+      <div className="flex justify-end gap-1.5">
+        <Button variant="ghost" size="sm" onClick={onDismiss}>
+          Skip
+        </Button>
+        <Button size="sm" disabled={!allAnswered} onClick={handleSubmit}>
+          Submit
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 function formatTokens(n: number) {
@@ -233,7 +255,9 @@ function formatCost(usd: number) {
 function UsageBanner({ usage }: { usage: UsageInfo }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-      {usage.duration_ms > 0 && <span>{formatDuration(usage.duration_ms)}</span>}
+      {usage.duration_ms > 0 && (
+        <span>{formatDuration(usage.duration_ms)}</span>
+      )}
       <span title="Input tokens">{formatTokens(usage.input_tokens)} in</span>
       <span title="Output tokens">{formatTokens(usage.output_tokens)} out</span>
       {usage.cache_read_tokens > 0 && (
@@ -244,37 +268,6 @@ function UsageBanner({ usage }: { usage: UsageInfo }) {
       {usage.total_cost_usd > 0 && (
         <span className="ml-auto">{formatCost(usage.total_cost_usd)}</span>
       )}
-    </div>
-  )
-}
-
-function ChoiceBlock({
-  data,
-  onSelect,
-  disabled,
-}: {
-  data: ChoiceData
-  onSelect: (option: string) => void
-  disabled: boolean
-}) {
-  return (
-    <div className="my-2 rounded-lg border border-border/50 bg-muted/30 p-3">
-      <div className="mb-2 text-xs font-semibold text-foreground">
-        {data.question}
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {data.options.map((opt) => (
-          <Button
-            key={opt}
-            variant="outline"
-            size="sm"
-            onClick={() => onSelect(opt)}
-            disabled={disabled}
-          >
-            {opt}
-          </Button>
-        ))}
-      </div>
     </div>
   )
 }
@@ -296,6 +289,8 @@ export default function ChatPanel({
   onSend,
   onStop,
   onArtifactClick,
+  pendingQuestions,
+  dismissQuestions,
 }: ChatPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [input, setInput] = useState('')
@@ -448,25 +443,7 @@ export default function ChatPanel({
                     </div>
                     {msg.thinking && <ThinkingBlock content={msg.thinking} />}
                     <div className="prose prose-invert break-words text-[13px] leading-relaxed text-foreground">
-                      {msg.content
-                        ? parseContentWithChoices(msg.content).map((part, i) =>
-                            part.type === 'text' ? (
-                              <Markdown key={i}>{part.text}</Markdown>
-                            ) : (
-                              <ChoiceBlock
-                                key={i}
-                                data={part.data}
-                                onSelect={(opt) =>
-                                  onSend(opt, {
-                                    model: model || undefined,
-                                    effort: effort || undefined,
-                                  })
-                                }
-                                disabled={isStreaming}
-                              />
-                            ),
-                          )
-                        : null}
+                      {msg.content ? <Markdown>{msg.content}</Markdown> : null}
                     </div>
                     {msg.artifacts?.map((file) => (
                       <button
@@ -480,6 +457,18 @@ export default function ChatPanel({
                     ))}
                   </div>
                 ))}
+                {pendingQuestions && (
+                  <QuestionForm
+                    questions={pendingQuestions}
+                    onSubmit={(response) =>
+                      onSend(response, {
+                        model: model || undefined,
+                        effort: effort || undefined,
+                      })
+                    }
+                    onDismiss={dismissQuestions}
+                  />
+                )}
                 {isStreaming && <StatusIndicator status={status} />}
                 {usage && <UsageBanner usage={usage} />}
                 <div ref={messagesEndRef} />

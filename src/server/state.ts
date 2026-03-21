@@ -123,9 +123,7 @@ export const renamePageFn = createServerFn({ method: 'POST' })
   })
 
 export const getArtifactPageFn = createServerFn({ method: 'POST' })
-  .inputValidator(
-    (input: { projectId: string; artifactPath: string }) => input,
-  )
+  .inputValidator((input: { projectId: string; artifactPath: string }) => input)
   .handler(async ({ data }) => {
     const { getArtifactByPath } = await import('../mcp/db.js')
     const artifact = getArtifactByPath(data.projectId, data.artifactPath)
@@ -187,6 +185,7 @@ export const loadChatMessages = createServerFn({ method: 'POST' })
       content: r.content,
       thinking: r.thinking ?? undefined,
       artifacts: r.artifacts ? JSON.parse(r.artifacts) : [],
+      questions: r.questions ? JSON.parse(r.questions) : undefined,
     }))
   })
 
@@ -200,6 +199,7 @@ export const saveChatMessagesFn = createServerFn({ method: 'POST' })
         content: string
         thinking?: string
         artifacts?: unknown[]
+        questions?: unknown[]
       }[]
     }) => input,
   )
