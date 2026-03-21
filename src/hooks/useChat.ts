@@ -276,16 +276,16 @@ export function useChat({
 
               if (data.type === 'usage') {
                 const u = data.usage as Record<string, number>
-                setUsage({
-                  duration_ms: data.duration_ms as number,
-                  total_cost_usd: data.total_cost_usd as number,
-                  input_tokens: (u?.input_tokens) || 0,
-                  output_tokens: (u?.output_tokens) || 0,
+                setUsage((prev) => ({
+                  duration_ms: (data.duration_ms as number) ?? prev?.duration_ms ?? 0,
+                  total_cost_usd: (data.total_cost_usd as number) ?? prev?.total_cost_usd ?? 0,
+                  input_tokens: u?.input_tokens ?? prev?.input_tokens ?? 0,
+                  output_tokens: u?.output_tokens ?? prev?.output_tokens ?? 0,
                   cache_read_tokens:
-                    (u?.cache_read_input_tokens) || 0,
+                    u?.cache_read_input_tokens ?? prev?.cache_read_tokens ?? 0,
                   cache_creation_tokens:
-                    (u?.cache_creation_input_tokens) || 0,
-                })
+                    u?.cache_creation_input_tokens ?? prev?.cache_creation_tokens ?? 0,
+                }))
               }
 
               if (data.type === 'error') {

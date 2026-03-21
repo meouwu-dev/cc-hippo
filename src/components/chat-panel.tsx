@@ -233,7 +233,7 @@ function formatCost(usd: number) {
 function UsageBanner({ usage }: { usage: UsageInfo }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-      <span>{formatDuration(usage.duration_ms)}</span>
+      {usage.duration_ms > 0 && <span>{formatDuration(usage.duration_ms)}</span>}
       <span title="Input tokens">{formatTokens(usage.input_tokens)} in</span>
       <span title="Output tokens">{formatTokens(usage.output_tokens)} out</span>
       {usage.cache_read_tokens > 0 && (
@@ -241,7 +241,9 @@ function UsageBanner({ usage }: { usage: UsageInfo }) {
           {formatTokens(usage.cache_read_tokens)} cached
         </span>
       )}
-      <span className="ml-auto">{formatCost(usage.total_cost_usd)}</span>
+      {usage.total_cost_usd > 0 && (
+        <span className="ml-auto">{formatCost(usage.total_cost_usd)}</span>
+      )}
     </div>
   )
 }
@@ -479,7 +481,7 @@ export default function ChatPanel({
                   </div>
                 ))}
                 {isStreaming && <StatusIndicator status={status} />}
-                {!isStreaming && usage && <UsageBanner usage={usage} />}
+                {usage && <UsageBanner usage={usage} />}
                 <div ref={messagesEndRef} />
               </div>
             </div>

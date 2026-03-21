@@ -199,6 +199,11 @@ export const chatStream = createServerFn({ method: 'POST' })
 
       if (event.type === 'assistant') {
         const msg = event.message as Record<string, unknown> | undefined
+        // Stream incremental usage from assistant events
+        const msgUsage = msg?.usage as Record<string, number> | undefined
+        if (msgUsage) {
+          send({ type: 'usage', usage: msgUsage })
+        }
         const contentBlocks = (msg?.content as Record<string, unknown>[]) || []
         for (const block of contentBlocks) {
           if (block.type === 'text') {
