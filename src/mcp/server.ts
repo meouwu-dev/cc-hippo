@@ -44,10 +44,14 @@ server.registerTool(
   'linkArtifacts',
   {
     description:
-      'Create a directional relationship between two artifacts. Use this to declare that one artifact references, implements, or derives from another.',
+      'Create a directional relationship between two artifacts. The edge flows from source (left) to target (right) on the canvas. For "implements": source is the spec/design, target is the implementation. For "derives": source is the original, target is the derivative.',
     inputSchema: {
-      source_path: z.string().describe('Path of the source artifact'),
-      target_path: z.string().describe('Path of the target artifact'),
+      source_path: z
+        .string()
+        .describe('Path of the source artifact (appears on the left)'),
+      target_path: z
+        .string()
+        .describe('Path of the target artifact (appears on the right)'),
       kind: z
         .enum(['references', 'implements', 'derives', 'extends'])
         .default('references')

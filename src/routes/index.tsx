@@ -390,7 +390,7 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
 
   const handleEdgeCreated = useCallback(
     (edge: { source: string; target: string; kind?: string }) => {
-      addEdge(edge.target, edge.source, edge.kind)
+      addEdge(edge.source, edge.target, edge.kind)
     },
     [addEdge],
   )
