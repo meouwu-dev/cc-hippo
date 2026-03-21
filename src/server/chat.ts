@@ -167,7 +167,15 @@ export const chatStream = createServerFn({ method: 'POST' })
       event: Record<string, unknown>,
       send: (data: Record<string, unknown>) => void,
     ) => {
-      if (event.type === 'result') return
+      if (event.type === 'result') {
+        send({
+          type: 'usage',
+          duration_ms: event.duration_ms,
+          total_cost_usd: event.total_cost_usd,
+          usage: event.usage,
+        })
+        return
+      }
 
       if (event.type === 'assistant') {
         const msg = event.message as Record<string, unknown> | undefined
@@ -216,13 +224,22 @@ export const chatStream = createServerFn({ method: 'POST' })
       }
     }
 
+    let killClaude: (() => void) | undefined
+
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder()
+        let closed = false
         const send = (data: Record<string, unknown>) => {
+          if (closed) return
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
           )
+        }
+        const closeController = () => {
+          if (closed) return
+          closed = true
+          controller.close()
         }
 
         const claude = spawn('claude', args, {
@@ -236,6 +253,15 @@ export const chatStream = createServerFn({ method: 'POST' })
         const heartbeat = setInterval(() => {
           if (!claudeDone) send({ type: 'heartbeat' })
         }, 5000)
+
+        killClaude = () => {
+          if (!claudeDone) {
+            closed = true
+            claudeDone = true
+            clearInterval(heartbeat)
+            claude.kill('SIGTERM')
+          }
+        }
 
         let buffer = ''
 
@@ -289,7 +315,7 @@ export const chatStream = createServerFn({ method: 'POST' })
           }
 
           send({ type: 'done', code, signal })
-          controller.close()
+          closeController()
         })
 
         claude.on('error', (err) => {
@@ -297,8 +323,11 @@ export const chatStream = createServerFn({ method: 'POST' })
           claudeDone = true
           clearInterval(heartbeat)
           send({ type: 'error', message: err.message })
-          controller.close()
+          closeController()
         })
+      },
+      cancel() {
+        killClaude?.()
       },
     })
 

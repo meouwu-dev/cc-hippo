@@ -397,7 +397,7 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
     [openArtifactBatch],
   )
 
-  const { messages, isStreaming, status, sendMessage, stop } = useChat({
+  const { messages, isStreaming, status, usage, sendMessage, stop } = useChat({
     projectId,
     conversationId: currentConversationId ?? '',
     onFileCreated: handleFileCreated,
@@ -488,6 +488,7 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
           onEffortChange={(effort: string) =>
             updateSettings(currentConversation.model, effort)
           }
+          usage={usage}
           onSend={sendMessage}
           onStop={stop}
           onArtifactClick={handleArtifactClick}

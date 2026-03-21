@@ -29,6 +29,15 @@ export type StreamStatus =
   | { phase: 'responding' }
   | { phase: 'error'; message: string }
 
+export interface UsageInfo {
+  duration_ms: number
+  total_cost_usd: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_creation_tokens: number
+}
+
 export interface ArtifactEdge {
   source: string
   target: string
@@ -54,6 +63,7 @@ export function useChat({
   const [isStreaming, setIsStreaming] = useState(false)
   const [status, setStatus] = useState<StreamStatus>({ phase: 'idle' })
   const [artifacts, setArtifacts] = useState<ArtifactFile[]>([])
+  const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [loaded, setLoaded] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const onFileCreatedRef = useRef(onFileCreated)
@@ -118,6 +128,7 @@ export function useChat({
       })
 
       setIsStreaming(true)
+      setUsage(null)
       setStatus({ phase: 'connecting' })
       const controller = new AbortController()
       abortRef.current = controller
@@ -240,6 +251,20 @@ export function useChat({
                 })
               }
 
+              if (data.type === 'usage') {
+                const u = data.usage as Record<string, number>
+                setUsage({
+                  duration_ms: data.duration_ms as number,
+                  total_cost_usd: data.total_cost_usd as number,
+                  input_tokens: (u?.input_tokens as number) || 0,
+                  output_tokens: (u?.output_tokens as number) || 0,
+                  cache_read_tokens:
+                    (u?.cache_read_input_tokens as number) || 0,
+                  cache_creation_tokens:
+                    (u?.cache_creation_input_tokens as number) || 0,
+                })
+              }
+
               if (data.type === 'error') {
                 setStatus({ phase: 'error', message: data.message })
               }
@@ -302,6 +327,7 @@ export function useChat({
     messages,
     isStreaming,
     status,
+    usage,
     artifacts,
     loaded,
     sendMessage,

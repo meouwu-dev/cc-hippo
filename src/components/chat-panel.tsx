@@ -41,6 +41,7 @@ import type {
   ChatMessage,
   ArtifactFile,
   StreamStatus,
+  UsageInfo,
 } from '../hooks/useChat.js'
 import type { Conversation } from '../hooks/useConversation.js'
 
@@ -57,6 +58,7 @@ interface ChatPanelProps {
   onDeleteConversation: (id: string) => void
   onModelChange: (model: string) => void
   onEffortChange: (effort: string) => void
+  usage: UsageInfo | null
   onSend: (text: string, opts: { model?: string; effort?: string }) => void
   onStop: () => void
   onArtifactClick: (file: ArtifactFile) => void
@@ -213,6 +215,41 @@ function parseContentWithChoices(content: string) {
   return parts
 }
 
+function formatTokens(n: number) {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function formatCost(usd: number) {
+  if (usd < 0.01) return `$${usd.toFixed(4)}`
+  return `$${usd.toFixed(2)}`
+}
+
+function UsageBanner({ usage }: { usage: UsageInfo }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+      <span>{formatDuration(usage.duration_ms)}</span>
+      <span title="Input tokens">
+        {formatTokens(usage.input_tokens)} in
+      </span>
+      <span title="Output tokens">
+        {formatTokens(usage.output_tokens)} out
+      </span>
+      {usage.cache_read_tokens > 0 && (
+        <span title="Cache read tokens">
+          {formatTokens(usage.cache_read_tokens)} cached
+        </span>
+      )}
+      <span className="ml-auto">{formatCost(usage.total_cost_usd)}</span>
+    </div>
+  )
+}
+
 function ChoiceBlock({
   data,
   onSelect,
@@ -257,6 +294,7 @@ export default function ChatPanel({
   onDeleteConversation,
   onModelChange,
   onEffortChange,
+  usage,
   onSend,
   onStop,
   onArtifactClick,
@@ -445,6 +483,7 @@ export default function ChatPanel({
                   </div>
                 ))}
                 {isStreaming && <StatusIndicator status={status} />}
+                {!isStreaming && usage && <UsageBanner usage={usage} />}
                 <div ref={messagesEndRef} />
               </div>
             </div>
