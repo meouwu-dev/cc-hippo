@@ -150,6 +150,7 @@ function ThinkingBlock({
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [index, setIndex] = useState(0)
   const userNavigatedRef = useRef(false)
+  const blockRef = useRef<HTMLDivElement>(null)
 
   // Auto-follow latest block unless user clicked <
   useEffect(() => {
@@ -166,8 +167,18 @@ function ThinkingBlock({
   const total = blocks.length
 
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded}>
-      <div className="my-1 overflow-hidden rounded-md border bg-muted/30">
+    <Collapsible
+      open={expanded}
+      onOpenChange={(open) => {
+        setExpanded(open)
+        if (open) {
+          requestAnimationFrame(() => {
+            blockRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+          })
+        }
+      }}
+    >
+      <div ref={blockRef} className="my-1 overflow-hidden rounded-md border bg-muted/30">
         <div className="flex items-center gap-1.5 px-2 py-1.5">
           <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground">
             <ChevronRight
@@ -217,7 +228,7 @@ function ThinkingBlock({
         </div>
         <CollapsibleContent
           keepMounted
-          className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-[closed]:h-0"
+          className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-[starting-style]:h-0 data-[ending-style]:h-0"
         >
           <div className="h-52 overflow-auto whitespace-pre-wrap break-words px-2 pb-1.5 text-[11px] leading-relaxed text-muted-foreground">
             {current}
