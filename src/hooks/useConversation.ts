@@ -38,8 +38,17 @@ export function useConversation(projectId: string) {
       getAppStateFn({ data: { key } }),
     ]).then(async ([list, { value: saved }]) => {
       if (list.length === 0) {
+        const [lastModel, lastEffort] = await Promise.all([
+          getAppStateFn({ data: { key: 'last_model' } }),
+          getAppStateFn({ data: { key: 'last_effort' } }),
+        ])
         const created = await createConversationFn({
-          data: { projectId, name: 'Chat 1' },
+          data: {
+            projectId,
+            name: 'Chat 1',
+            model: lastModel.value ?? undefined,
+            effort: lastEffort.value ?? undefined,
+          },
         })
         list = [created as Conversation]
       }
@@ -99,8 +108,17 @@ export function useConversation(projectId: string) {
         if (next.length === 0) {
           loadConversations({ data: { projectId } }).then(async (list) => {
             if (list.length === 0) {
+              const [lastModel, lastEffort] = await Promise.all([
+                getAppStateFn({ data: { key: 'last_model' } }),
+                getAppStateFn({ data: { key: 'last_effort' } }),
+              ])
               const created = (await createConversationFn({
-                data: { projectId, name: 'Chat 1' },
+                data: {
+                  projectId,
+                  name: 'Chat 1',
+                  model: lastModel.value ?? undefined,
+                  effort: lastEffort.value ?? undefined,
+                },
               })) as Conversation
               setConversations([created])
               setCurrentConversationId(created.id)
