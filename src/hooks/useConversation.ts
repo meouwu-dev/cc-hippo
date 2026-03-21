@@ -3,6 +3,7 @@ import {
   loadConversations,
   createConversationFn,
   deleteConversationFn,
+  renameConversationFn,
   updateConversationSettingsFn,
   getAppStateFn,
   setAppStateFn,
@@ -123,6 +124,16 @@ export function useConversation(projectId: string) {
     [projectId, currentConversationId],
   )
 
+  const renameConversation = useCallback(
+    async (id: string, name: string) => {
+      await renameConversationFn({ data: { conversationId: id, name } })
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, name } : c)),
+      )
+    },
+    [],
+  )
+
   const updateSettings = useCallback(
     async (model: string, effort: string) => {
       if (!currentConversationId) return
@@ -152,6 +163,7 @@ export function useConversation(projectId: string) {
     switchConversation,
     createConversation,
     deleteConversation,
+    renameConversation,
     updateSettings,
   }
 }

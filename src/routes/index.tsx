@@ -26,7 +26,7 @@ import {
   renamePageFn,
   getArtifactPageFn,
 } from '../server/state.js'
-import { Plus, X, Check, Trash2 } from 'lucide-react'
+import { Plus, X, Check, Trash2, Pencil } from 'lucide-react'
 import { Button } from '../components/ui/button.js'
 import { Input } from '../components/ui/input.js'
 import {
@@ -123,6 +123,7 @@ function CanvasApp({
     switchConversation,
     createConversation,
     deleteConversation,
+    renameConversation,
     updateSettings,
   } = useConversation(projectId)
 
@@ -202,6 +203,23 @@ function CanvasApp({
     },
     [rawSendMessage, pages, currentPageId],
   )
+
+  // Auto-rename conversation after first interaction if still using default name
+  const autoRenamedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!currentConversationId || isStreaming) return
+    if (autoRenamedRef.current.has(currentConversationId)) return
+    const conv = conversations.find((c) => c.id === currentConversationId)
+    if (!conv || !/^Chat \d+$/.test(conv.name)) return
+    const firstUserMsg = messages.find((m) => m.role === 'user')
+    const hasAssistant = messages.some((m) => m.role === 'assistant')
+    if (!firstUserMsg || !hasAssistant) return
+    autoRenamedRef.current.add(currentConversationId)
+    const title = firstUserMsg.content.slice(0, 40).trim()
+    if (title) {
+      renameConversation(currentConversationId, title + (firstUserMsg.content.length > 40 ? '…' : ''))
+    }
+  }, [currentConversationId, conversations, messages, isStreaming, renameConversation])
 
   // Pending focus: when clicking an artifact in chat, navigate to its page then focus
   const [pendingFocusPath, setPendingFocusPath] = useState<string | null>(null)
@@ -338,18 +356,33 @@ function CanvasApp({
                 {p.name}
               </span>
             )}
-            {pages.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeletePage(p.id)
-                }}
-              >
-                <X size={10} />
-              </Button>
+            {editingPageId !== p.id && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleStartRename(p.id, p.name)
+                  }}
+                >
+                  <Pencil size={9} />
+                </Button>
+                {pages.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeletePage(p.id)
+                    }}
+                  >
+                    <X size={10} />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         ))}
@@ -513,6 +546,7 @@ function CanvasApp({
           onSwitchConversation={switchConversation}
           onCreateConversation={createConversation}
           onDeleteConversation={deleteConversation}
+          onRenameConversation={renameConversation}
           onUpdateSettings={updateSettings}
           onArtifactClick={handleArtifactClick}
           pendingFocusPath={pendingFocusPath}
@@ -550,6 +584,7 @@ interface CanvasPageProps {
   onSwitchConversation: ReturnType<typeof useConversation>['switchConversation']
   onCreateConversation: ReturnType<typeof useConversation>['createConversation']
   onDeleteConversation: ReturnType<typeof useConversation>['deleteConversation']
+  onRenameConversation: ReturnType<typeof useConversation>['renameConversation']
   onUpdateSettings: ReturnType<typeof useConversation>['updateSettings']
   onArtifactClick: (file: ArtifactFile) => void
   pendingFocusPath: string | null
@@ -576,6 +611,7 @@ function CanvasPage({
   onSwitchConversation,
   onCreateConversation,
   onDeleteConversation,
+  onRenameConversation,
   onUpdateSettings,
   onArtifactClick,
   pendingFocusPath,
@@ -681,6 +717,7 @@ function CanvasPage({
           onSwitchConversation={onSwitchConversation}
           onCreateConversation={onCreateConversation}
           onDeleteConversation={onDeleteConversation}
+          onRenameConversation={onRenameConversation}
           onModelChange={(model: string) =>
             onUpdateSettings(model, currentConversation.effort)
           }

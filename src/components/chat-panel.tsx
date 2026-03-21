@@ -9,6 +9,8 @@ import {
   Plus,
   Trash2,
   SendHorizonal,
+  Pencil,
+  Check,
 } from 'lucide-react'
 import { Button } from './ui/button.js'
 import {
@@ -58,6 +60,7 @@ interface ChatPanelProps {
   onSwitchConversation: (id: string) => void
   onCreateConversation: (name?: string) => void
   onDeleteConversation: (id: string) => void
+  onRenameConversation: (id: string, name: string) => void
   onModelChange: (model: string) => void
   onEffortChange: (effort: string) => void
   usage: UsageInfo | null
@@ -283,6 +286,7 @@ export default function ChatPanel({
   onSwitchConversation,
   onCreateConversation,
   onDeleteConversation,
+  onRenameConversation,
   onModelChange,
   onEffortChange,
   usage,
@@ -294,6 +298,8 @@ export default function ChatPanel({
 }: ChatPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [input, setInput] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
   const model = currentModel
   const effort = currentEffort
   const setModel = (v: string) => onModelChange(v === 'default' ? 'default' : v)
@@ -329,42 +335,106 @@ export default function ChatPanel({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-[var(--bg-surface)] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
         {/* Header with conversation switcher */}
         <div className="flex shrink-0 items-center gap-1 border-b border-border/50 bg-card px-3 py-2">
-          <Select
-            value={currentConversationId}
-            onValueChange={(val: string | null) => {
-              if (val) onSwitchConversation(val)
-            }}
-          >
-            <SelectTrigger size="sm" className="flex-1 text-xs">
-              <SelectValue>
-                {conversations.find((c) => c.id === currentConversationId)
-                  ?.name ?? 'Chat'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {conversations.map((c) => (
-                <SelectItem key={c.id} value={c.id} label={c.name}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-5 shrink-0"
-                  onClick={() => onCreateConversation()}
-                />
-              }
+          {isRenaming ? (
+            <form
+              className="flex flex-1 items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (renameValue.trim()) {
+                  onRenameConversation(currentConversationId, renameValue.trim())
+                }
+                setIsRenaming(false)
+              }}
             >
-              <Plus size={12} />
-            </TooltipTrigger>
-            <TooltipContent>New chat</TooltipContent>
-          </Tooltip>
-          {conversations.length > 1 && (
+              <Input
+                autoFocus
+                className="h-6 flex-1 text-xs"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => {
+                  if (renameValue.trim()) {
+                    onRenameConversation(
+                      currentConversationId,
+                      renameValue.trim(),
+                    )
+                  }
+                  setIsRenaming(false)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setIsRenaming(false)
+                }}
+              />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon-xs"
+                className="size-5 shrink-0"
+              >
+                <Check size={12} />
+              </Button>
+            </form>
+          ) : (
+            <>
+              <Select
+                value={currentConversationId}
+                onValueChange={(val: string | null) => {
+                  if (val) onSwitchConversation(val)
+                }}
+              >
+                <SelectTrigger size="sm" className="flex-1 text-xs">
+                  <SelectValue>
+                    {conversations.find((c) => c.id === currentConversationId)
+                      ?.name ?? 'Chat'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {conversations.map((c) => (
+                    <SelectItem key={c.id} value={c.id} label={c.name}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-5 shrink-0"
+                      onClick={() => {
+                        const name =
+                          conversations.find(
+                            (c) => c.id === currentConversationId,
+                          )?.name ?? ''
+                        setRenameValue(name)
+                        setIsRenaming(true)
+                      }}
+                    />
+                  }
+                >
+                  <Pencil size={11} />
+                </TooltipTrigger>
+                <TooltipContent>Rename chat</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-5 shrink-0"
+                      onClick={() => onCreateConversation()}
+                    />
+                  }
+                >
+                  <Plus size={12} />
+                </TooltipTrigger>
+                <TooltipContent>New chat</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+          {!isRenaming && conversations.length > 1 && (
             <AlertDialog>
               <Tooltip>
                 <TooltipTrigger
