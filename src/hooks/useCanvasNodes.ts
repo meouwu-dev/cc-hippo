@@ -141,7 +141,23 @@ function debouncedSavePosition(
   )
 }
 
-export function useCanvasNodes(projectId: string, pageId: string) {
+export interface ViewportInfo {
+  /** Flow-coordinate X of the viewport's left edge */
+  x: number
+  /** Flow-coordinate Y of the viewport's top edge */
+  y: number
+  /** Viewport width in flow coordinates */
+  width: number
+  /** Viewport height in flow coordinates */
+  height: number
+  zoom: number
+}
+
+export function useCanvasNodes(
+  projectId: string,
+  pageId: string,
+  viewportRef?: React.RefObject<ViewportInfo | null>,
+) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
 
@@ -252,6 +268,58 @@ export function useCanvasNodes(projectId: string, pageId: string) {
     [],
   )
 
+  const NODE_W = 480
+  const NODE_H = 400
+  const GAP_X = 60
+  const GAP_Y = 80
+  // Chat panel is 380px + 16px margin on each side
+  const PANEL_OFFSET_PX = 420
+
+  // Where the next node should be placed (flow coordinates)
+  const nextPosRef = useRef<{ x: number; y: number } | null>(null)
+
+  const startNewRow = useCallback(() => {
+    const allArtifacts = nodesRef.current.filter(
+      (n) => n.type === 'artifact' && !n.parentId,
+    )
+    const vp = viewportRef?.current
+
+    if (allArtifacts.length === 0) {
+      // First ever spawn — place to the right of the chat panel in viewport
+      if (vp) {
+        nextPosRef.current = {
+          x: vp.x + PANEL_OFFSET_PX / vp.zoom + GAP_X,
+          y: vp.y + GAP_Y,
+        }
+      } else {
+        nextPosRef.current = { x: PANEL_OFFSET_PX + GAP_X, y: GAP_Y }
+      }
+      return
+    }
+
+    // Find the bottom edge of all existing nodes (the "working row" bottom)
+    const bottomEdge = allArtifacts.reduce((max, n) => {
+      const h = (n.style?.height as number) || NODE_H
+      return Math.max(max, n.position.y + h)
+    }, 0)
+
+    // Find the leftmost X among the bottom-most row of nodes
+    // (nodes whose bottom is within NODE_H of the overall bottom)
+    const bottomRowNodes = allArtifacts.filter((n) => {
+      const h = (n.style?.height as number) || NODE_H
+      return n.position.y + h >= bottomEdge - NODE_H / 2
+    })
+    const leftX = bottomRowNodes.reduce(
+      (min, n) => Math.min(min, n.position.x),
+      Infinity,
+    )
+
+    nextPosRef.current = {
+      x: isFinite(leftX) ? leftX : (vp ? vp.x + PANEL_OFFSET_PX / vp.zoom + GAP_X : PANEL_OFFSET_PX + GAP_X),
+      y: bottomEdge + GAP_Y,
+    }
+  }, [viewportRef])
+
   const openArtifact = useCallback((file: ArtifactFile) => {
     setNodes((prev) => {
       const existingIdx = prev.findIndex(
@@ -288,21 +356,53 @@ export function useCanvasNodes(projectId: string, pageId: string) {
         })
       }
 
-      // New node — position based on existing artifact count
-      const artifactNodes = prev.filter((n) => n.type === 'artifact')
+      // Compute position for the new node
+      let x: number
+      let y: number
+
+      if (nextPosRef.current) {
+        // Use the position set by startNewRow
+        x = nextPosRef.current.x
+        y = nextPosRef.current.y
+        // Advance for next node in this row: shift right
+        nextPosRef.current = { x: x + NODE_W + GAP_X, y }
+      } else {
+        // Fallback: place to the right of the rightmost existing node
+        const artifactNodes = prev.filter(
+          (n) => n.type === 'artifact' && !n.parentId,
+        )
+        if (artifactNodes.length === 0) {
+          const vp = viewportRef?.current
+          x = vp
+            ? vp.x + PANEL_OFFSET_PX / vp.zoom + GAP_X
+            : PANEL_OFFSET_PX + GAP_X
+          y = vp ? vp.y + GAP_Y : GAP_Y
+        } else {
+          const rightmost = artifactNodes.reduce((best, n) => {
+            const nRight = n.position.x + ((n.style?.width as number) || NODE_W)
+            const bRight =
+              best.position.x + ((best.style?.width as number) || NODE_W)
+            return nRight > bRight ? n : best
+          })
+          x =
+            rightmost.position.x +
+            ((rightmost.style?.width as number) || NODE_W) +
+            GAP_X
+          y = rightmost.position.y
+        }
+        nextPosRef.current = { x: x + NODE_W + GAP_X, y }
+      }
+
       const newNode: Node = {
         id: `artifact-${file.path}`,
         type: 'artifact',
-        position: {
-          x: 100 + artifactNodes.length * 40,
-          y: 100 + artifactNodes.length * 40,
-        },
+        position: { x, y },
         data: {
           file,
           label: file.filename,
           artifactId: '', // will be populated when DB row exists
         } satisfies ArtifactNodeData,
-        style: { width: 480, height: 400 },
+        style: { width: NODE_W, height: NODE_H },
       }
 
       return [...prev, newNode]
@@ -516,6 +616,7 @@ export function useCanvasNodes(projectId: string, pageId: string) {
     addEdge,
     openArtifact,
     openArtifactBatch,
+    startNewRow,
     toggleMinimizeArtifact,
     closeSection,
     clearCanvas,

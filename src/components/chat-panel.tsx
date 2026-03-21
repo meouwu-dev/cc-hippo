@@ -286,18 +286,27 @@ function QuestionForm({
             {q.question}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {q.options.map((opt) => (
-              <Button
-                key={opt}
-                variant={
-                  answers[i] === opt && !customInputs[i] ? 'default' : 'outline'
-                }
-                size="sm"
-                onClick={() => setAnswer(i, opt)}
-              >
-                {opt}
-              </Button>
-            ))}
+            {q.options.map((raw) => {
+              // Options may arrive as strings or {label, description} objects
+              const opt =
+                typeof raw === 'string'
+                  ? raw
+                  : (raw as { label: string }).label ?? String(raw)
+              return (
+                <Button
+                  key={opt}
+                  variant={
+                    answers[i] === opt && !customInputs[i]
+                      ? 'default'
+                      : 'outline'
+                  }
+                  size="sm"
+                  onClick={() => setAnswer(i, opt)}
+                >
+                  {opt}
+                </Button>
+              )
+            })}
           </div>
           <Input
             className="mt-1 h-7 text-xs"

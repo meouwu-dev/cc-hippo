@@ -24,7 +24,7 @@ export interface ArtifactFile {
 
 export interface UserQuestion {
   question: string
-  options: string[]
+  options: (string | { label: string; description?: string })[]
   allowCustom?: boolean
 }
 
@@ -57,6 +57,7 @@ interface UseChatOptions {
   onFileCreated?: (file: ArtifactFile) => void
   onEdgeCreated?: (edge: ArtifactEdge) => void
   onBatchCreated?: (files: ArtifactFile[]) => void
+  onStartNewRow?: () => void
   onSwitchPage?: (pageId: string) => void
 }
 
@@ -66,6 +67,7 @@ export function useChat({
   onFileCreated,
   onEdgeCreated,
   onBatchCreated,
+  onStartNewRow,
   onSwitchPage,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -84,6 +86,8 @@ export function useChat({
   onEdgeCreatedRef.current = onEdgeCreated
   const onBatchCreatedRef = useRef(onBatchCreated)
   onBatchCreatedRef.current = onBatchCreated
+  const onStartNewRowRef = useRef(onStartNewRow)
+  onStartNewRowRef.current = onStartNewRow
   const onSwitchPageRef = useRef(onSwitchPage)
   onSwitchPageRef.current = onSwitchPage
 
@@ -162,6 +166,7 @@ export function useChat({
       setIsStreaming(true)
       setUsage(null)
       setStatus({ phase: 'connecting' })
+      onStartNewRowRef.current?.()
       const controller = new AbortController()
       abortRef.current = controller
 

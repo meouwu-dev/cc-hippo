@@ -149,8 +149,8 @@ export const chatStream = createServerFn({ method: 'POST' })
     }
     args.push('--add-dir', outputDir)
 
-    if (model) args.push('--model', model)
-    if (effort) args.push('--effort', effort)
+    if (model && model !== 'default') args.push('--model', model)
+    if (effort && effort !== 'default') args.push('--effort', effort)
 
     console.log(`[chat] Spawning claude, pid pending...`)
 

@@ -14,7 +14,7 @@ import ChatPanel from '../components/chat-panel.js'
 import ArtifactNode from '../components/artifact-node.js'
 import SectionNode from '../components/section-node.js'
 import { useChat } from '../hooks/useChat.js'
-import { useCanvasNodes } from '../hooks/useCanvasNodes.js'
+import { useCanvasNodes, type ViewportInfo } from '../hooks/useCanvasNodes.js'
 import { useProject } from '../hooks/useProject.js'
 import { useConversation } from '../hooks/useConversation.js'
 import { appMeta } from '../consts.js'
@@ -138,6 +138,7 @@ function CanvasApp({
   const batchCreatedRef = useRef<((files: ArtifactFile[]) => void) | undefined>(
     undefined,
   )
+  const startNewRowRef = useRef<(() => void) | undefined>(undefined)
 
   // Stable wrappers that delegate to the current page's callbacks
   const onFileCreated = useCallback((file: ArtifactFile) => {
@@ -151,6 +152,9 @@ function CanvasApp({
   )
   const onBatchCreated = useCallback((files: ArtifactFile[]) => {
     batchCreatedRef.current?.(files)
+  }, [])
+  const onStartNewRow = useCallback(() => {
+    startNewRowRef.current?.()
   }, [])
   const onSwitchPage = useCallback(
     (pageId: string) => {
@@ -188,6 +192,7 @@ function CanvasApp({
     onFileCreated,
     onEdgeCreated,
     onBatchCreated,
+    onStartNewRow,
     onSwitchPage,
   })
 
@@ -543,6 +548,7 @@ function CanvasApp({
           fileCreatedRef={fileCreatedRef}
           edgeCreatedRef={edgeCreatedRef}
           batchCreatedRef={batchCreatedRef}
+          startNewRowRef={startNewRowRef}
           messages={messages}
           isStreaming={isStreaming}
           status={status}
@@ -579,6 +585,7 @@ interface CanvasPageProps {
   batchCreatedRef: React.RefObject<
     ((files: ArtifactFile[]) => void) | undefined
   >
+  startNewRowRef: React.RefObject<(() => void) | undefined>
   messages: ReturnType<typeof useChat>['messages']
   isStreaming: boolean
   status: ReturnType<typeof useChat>['status']
@@ -608,6 +615,7 @@ function CanvasPage({
   fileCreatedRef,
   edgeCreatedRef,
   batchCreatedRef,
+  startNewRowRef,
   messages,
   isStreaming,
   status,
@@ -628,6 +636,7 @@ function CanvasPage({
   pendingQuestions,
   dismissQuestions,
 }: CanvasPageProps) {
+  const viewportInfoRef = useRef<ViewportInfo | null>(null)
   const {
     nodes,
     edges,
@@ -637,9 +646,22 @@ function CanvasPage({
     addEdge,
     openArtifact,
     openArtifactBatch,
+    startNewRow,
     toggleMinimizeArtifact,
-  } = useCanvasNodes(projectId, pageId)
-  const { setCenter } = useReactFlow()
+  } = useCanvasNodes(projectId, pageId, viewportInfoRef)
+  const { setCenter, getViewport } = useReactFlow()
+
+  // Keep viewport info updated for node positioning
+  const updateViewportInfo = useCallback(() => {
+    const vp = getViewport()
+    viewportInfoRef.current = {
+      x: -vp.x / vp.zoom,
+      y: -vp.y / vp.zoom,
+      width: window.innerWidth / vp.zoom,
+      height: window.innerHeight / vp.zoom,
+      zoom: vp.zoom,
+    }
+  }, [getViewport])
 
   // Register canvas callbacks so useChat (in parent) can reach them
   useEffect(() => {
@@ -651,18 +673,22 @@ function CanvasPage({
       const sectionName = dir || 'Generated Files'
       openArtifactBatch(files, sectionName)
     }
+    startNewRowRef.current = () => startNewRow()
     return () => {
       fileCreatedRef.current = undefined
       edgeCreatedRef.current = undefined
       batchCreatedRef.current = undefined
+      startNewRowRef.current = undefined
     }
   }, [
     fileCreatedRef,
     edgeCreatedRef,
     batchCreatedRef,
+    startNewRowRef,
     openArtifact,
     addEdge,
     openArtifactBatch,
+    startNewRow,
   ])
 
   // Listen for close-artifact events from nodes
@@ -747,6 +773,8 @@ function CanvasPage({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onMoveEnd={updateViewportInfo}
+        onInit={updateViewportInfo}
         nodeTypes={nodeTypes}
         fitView={false}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
