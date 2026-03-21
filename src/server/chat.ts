@@ -177,6 +177,8 @@ export const chatStream = createServerFn({ method: 'POST' })
 
     // In-memory file contents so we can apply Edit diffs without filesystem
     const fileContents = new Map<string, string>()
+    // Accumulate all thinking blocks across assistant events
+    const allThinkingBlocks: string[] = []
 
     const handleClaudeEvent = (
       event: Record<string, unknown>,
@@ -200,12 +202,17 @@ export const chatStream = createServerFn({ method: 'POST' })
           send({ type: 'usage', usage: msgUsage })
         }
         const contentBlocks = (msg?.content as Record<string, unknown>[]) || []
+        // Accumulate thinking blocks across all assistant events
+        const newThinking = contentBlocks
+          .filter((b) => b.type === 'thinking' && b.thinking)
+          .map((b) => b.thinking as string)
+        if (newThinking.length > 0) {
+          allThinkingBlocks.push(...newThinking)
+          send({ type: 'thinking', blocks: [...allThinkingBlocks] })
+        }
         for (const block of contentBlocks) {
           if (block.type === 'text') {
             send({ type: 'text', content: block.text })
-          }
-          if (block.type === 'thinking') {
-            send({ type: 'thinking', content: block.thinking })
           }
           if (block.type === 'tool_use') {
             const input = block.input as Record<string, string> | undefined

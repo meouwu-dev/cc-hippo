@@ -4,6 +4,7 @@ import {
   Square,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   Brain,
   ChevronRight,
   Plus,
@@ -11,6 +12,7 @@ import {
   SendHorizonal,
   Pencil,
   Check,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from './ui/button.js'
 import {
@@ -138,27 +140,87 @@ function StatusIndicator({ status }: { status: StreamStatus }) {
   )
 }
 
-function ThinkingBlock({ content }: { content: string }) {
-  const [expanded, setExpanded] = useState(false)
+function ThinkingBlock({
+  blocks,
+  defaultExpanded = false,
+}: {
+  blocks: string[]
+  defaultExpanded?: boolean
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [index, setIndex] = useState(0)
+  const userNavigatedRef = useRef(false)
 
-  if (!content) return null
+  // Auto-follow latest block unless user clicked <
+  useEffect(() => {
+    if (!userNavigatedRef.current) {
+      setIndex(blocks.length - 1)
+    }
+  }, [blocks.length])
 
-  const preview = content.length > 120 ? content.slice(0, 120) + '...' : content
+  const effectiveIndex = Math.min(index, blocks.length - 1)
+
+  if (!blocks.length) return null
+
+  const current = blocks[effectiveIndex]
+  const total = blocks.length
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <div className="my-1 overflow-hidden rounded-md border bg-muted/30">
-        <CollapsibleTrigger className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted/50">
-          <ChevronRight
-            size={12}
-            className={`shrink-0 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
-          />
-          <Brain size={12} />
-          <span>Internal reasoning</span>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="max-h-[400px] overflow-auto whitespace-pre-wrap break-words px-2 pb-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            {expanded ? content : preview}
+        <div className="flex items-center gap-1.5 px-2 py-1.5">
+          <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground">
+            <ChevronRight
+              size={12}
+              className={`shrink-0 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+            />
+            <Brain size={12} />
+            <span>
+              Internal reasoning{total > 1 ? ` (${total} blocks)` : ''}
+            </span>
+          </CollapsibleTrigger>
+          {total > 1 && expanded && (
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5"
+                disabled={effectiveIndex === 0}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const next = Math.max(0, effectiveIndex - 1)
+                  setIndex(next)
+                  userNavigatedRef.current = true
+                }}
+              >
+                <ChevronLeft size={10} />
+              </Button>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {effectiveIndex + 1}/{total}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5"
+                disabled={effectiveIndex >= total - 1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const next = Math.min(total - 1, effectiveIndex + 1)
+                  setIndex(next)
+                  userNavigatedRef.current = next < total - 1
+                }}
+              >
+                <ChevronRight size={10} />
+              </Button>
+            </div>
+          )}
+        </div>
+        <CollapsibleContent
+          keepMounted
+          className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-[closed]:h-0"
+        >
+          <div className="h-52 overflow-auto whitespace-pre-wrap break-words px-2 pb-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            {current}
           </div>
         </CollapsibleContent>
       </div>
@@ -500,33 +562,44 @@ export default function ChatPanel({
                     Send a message to start designing.
                   </div>
                 )}
-                {messages.map((msg) => (
-                  <div key={msg.id} className="flex flex-col gap-1">
-                    <div
-                      className={`text-[11px] font-semibold uppercase tracking-wider ${
-                        msg.role === 'user'
-                          ? 'text-muted-foreground'
-                          : 'text-primary'
-                      }`}
-                    >
-                      {msg.role === 'user' ? 'You' : 'Claude'}
+                {messages.map((msg) =>
+                  msg.role === 'user' ? (
+                    <div key={msg.id} className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-[13px] leading-relaxed text-primary-foreground">
+                        <Markdown>{msg.content}</Markdown>
+                      </div>
                     </div>
-                    {msg.thinking && <ThinkingBlock content={msg.thinking} />}
-                    <div className="prose prose-invert break-words text-[13px] leading-relaxed text-foreground">
-                      {msg.content ? <Markdown>{msg.content}</Markdown> : null}
+                  ) : (
+                    <div key={msg.id} className="flex gap-2">
+                      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <Sparkles size={12} className="text-primary" />
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        {msg.thinking?.length ? (
+                          <ThinkingBlock
+                            blocks={msg.thinking}
+                            defaultExpanded={!msg.content?.trim()}
+                          />
+                        ) : null}
+                        {msg.content?.trim() && (
+                          <div className="prose prose-invert break-words text-[13px] leading-relaxed text-foreground">
+                            <Markdown>{msg.content}</Markdown>
+                          </div>
+                        )}
+                        {msg.artifacts?.map((file) => (
+                          <button
+                            key={file.path}
+                            className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                            onClick={() => onArtifactClick(file)}
+                          >
+                            <span>📄</span>
+                            <span>{file.filename}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    {msg.artifacts?.map((file) => (
-                      <button
-                        key={file.path}
-                        className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                        onClick={() => onArtifactClick(file)}
-                      >
-                        <span>📄</span>
-                        <span>{file.filename}</span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                  ),
+                )}
                 {pendingQuestions && (
                   <QuestionForm
                     questions={pendingQuestions}
@@ -570,7 +643,7 @@ export default function ChatPanel({
               </SelectTrigger>
               <SelectContent>
                 {MODELS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
+                  <SelectItem key={m.value} value={m.value} label={m.label}>
                     {m.label}
                   </SelectItem>
                 ))}
@@ -588,7 +661,7 @@ export default function ChatPanel({
               </SelectTrigger>
               <SelectContent>
                 {EFFORTS.map((e) => (
-                  <SelectItem key={e.value} value={e.value}>
+                  <SelectItem key={e.value} value={e.value} label={e.label}>
                     {e.label}
                   </SelectItem>
                 ))}

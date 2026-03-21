@@ -10,7 +10,7 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  thinking?: string
+  thinking?: string[]
   artifacts?: ArtifactFile[]
   questions?: UserQuestion[]
 }
@@ -149,7 +149,7 @@ export function useChat({
         id: crypto.randomUUID(),
         role: 'assistant',
         content: '',
-        thinking: '',
+        thinking: [],
         artifacts: [],
       }
 
@@ -197,7 +197,7 @@ export function useChat({
         const decoder = new TextDecoder()
         let buf = ''
         let fullText = ''
-        let fullThinking = ''
+        const thinkingBlocks: string[] = []
         const msgArtifacts: ArtifactFile[] = []
         let gotFirstContent = false
 
@@ -215,14 +215,19 @@ export function useChat({
               const data = JSON.parse(line.slice(6))
 
               if (data.type === 'thinking') {
-                fullThinking = data.content
+                const blocks = data.blocks as string[]
+                thinkingBlocks.length = 0
+                thinkingBlocks.push(...blocks)
                 if (!gotFirstContent) {
-                  setStatus({ phase: 'thinking', content: data.content })
+                  setStatus({
+                    phase: 'thinking',
+                    content: blocks[blocks.length - 1],
+                  })
                 }
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMsg.id
-                      ? { ...m, thinking: fullThinking }
+                      ? { ...m, thinking: [...thinkingBlocks] }
                       : m,
                   ),
                 )

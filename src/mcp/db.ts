@@ -568,7 +568,7 @@ export function saveChatMessages(
     id: string
     role: string
     content: string
-    thinking?: string
+    thinking?: string[]
     artifacts?: unknown[]
     questions?: unknown[]
   }[],
@@ -590,7 +590,7 @@ export function saveChatMessages(
         conversationId,
         msg.role,
         msg.content,
-        msg.thinking ?? null,
+        msg.thinking?.length ? JSON.stringify(msg.thinking) : null,
         JSON.stringify(msg.artifacts ?? []),
         msg.questions ? JSON.stringify(msg.questions) : null,
       )

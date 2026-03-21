@@ -190,7 +190,16 @@ export const loadChatMessages = createServerFn({ method: 'POST' })
       id: r.id,
       role: r.role as 'user' | 'assistant',
       content: r.content,
-      thinking: r.thinking ?? undefined,
+      thinking: r.thinking
+        ? (() => {
+            try {
+              const parsed = JSON.parse(r.thinking)
+              return Array.isArray(parsed) ? parsed : [r.thinking]
+            } catch {
+              return [r.thinking]
+            }
+          })()
+        : undefined,
       artifacts: r.artifacts ? JSON.parse(r.artifacts) : [],
       questions: r.questions ? JSON.parse(r.questions) : undefined,
     }))
@@ -204,7 +213,7 @@ export const saveChatMessagesFn = createServerFn({ method: 'POST' })
         id: string
         role: string
         content: string
-        thinking?: string
+        thinking?: string[]
         artifacts?: unknown[]
         questions?: unknown[]
       }[]
