@@ -27,6 +27,7 @@ import {
   deletePageFn,
   renamePageFn,
   getArtifactPageFn,
+  savePageViewportFn,
 } from '../server/state.js'
 import { Plus, X, Check, Trash2, Pencil } from 'lucide-react'
 import { Button } from '../components/ui/button.js'
@@ -651,10 +652,29 @@ function CanvasPage({
     openArtifactBatch,
     startNewRow,
     toggleMinimizeArtifact,
+    savedViewport,
   } = useCanvasNodes(projectId, pageId, viewportInfoRef)
-  const { setCenter, getViewport } = useReactFlow()
+  const { setCenter, getViewport, setViewport } = useReactFlow()
 
-  // Keep viewport info updated for node positioning
+  // Restore saved viewport when page data loads
+  const hasRestoredRef = useRef(false)
+  useEffect(() => {
+    hasRestoredRef.current = false
+  }, [pageId])
+  useEffect(() => {
+    if (hasRestoredRef.current) return
+    // Wait until nodes have loaded (savedViewport is set in same .then())
+    if (savedViewport === undefined) return
+    hasRestoredRef.current = true
+    if (savedViewport) {
+      requestAnimationFrame(() => {
+        setViewport(savedViewport)
+      })
+    }
+  }, [savedViewport, setViewport])
+
+  // Keep viewport info updated for node positioning + persist to DB
+  const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateViewportInfo = useCallback(() => {
     const vp = getViewport()
     viewportInfoRef.current = {
@@ -664,7 +684,11 @@ function CanvasPage({
       height: window.innerHeight / vp.zoom,
       zoom: vp.zoom,
     }
-  }, [getViewport])
+    if (viewportSaveTimer.current) clearTimeout(viewportSaveTimer.current)
+    viewportSaveTimer.current = setTimeout(() => {
+      savePageViewportFn({ data: { pageId, x: vp.x, y: vp.y, zoom: vp.zoom } })
+    }, 500)
+  }, [getViewport, pageId])
 
   // Track selected nodes
   useOnSelectionChange({

@@ -23,13 +23,34 @@ export const loadState = createServerFn({ method: 'POST' })
 export const loadCanvasDataFn = createServerFn({ method: 'POST' })
   .inputValidator((input: { projectId: string; pageId: string }) => input)
   .handler(async ({ data }) => {
-    const { getArtifactsByPage, getEdgesByPage, getSections } =
+    const { getArtifactsByPage, getEdgesByPage, getSections, getDb } =
       await import('../mcp/db.js')
+    const db = getDb()
+    const page = db
+      .prepare('SELECT viewport_x, viewport_y, viewport_zoom FROM pages WHERE id = ?')
+      .get(data.pageId) as {
+      viewport_x: number | null
+      viewport_y: number | null
+      viewport_zoom: number | null
+    } | undefined
     return {
       artifacts: getArtifactsByPage(data.projectId, data.pageId),
       edges: getEdgesByPage(data.projectId, data.pageId),
       sections: getSections(data.projectId, data.pageId),
+      viewport: page?.viewport_x != null
+        ? { x: page.viewport_x, y: page.viewport_y!, zoom: page.viewport_zoom! }
+        : null,
     }
+  })
+
+export const savePageViewportFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: { pageId: string; x: number; y: number; zoom: number }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { savePageViewport } = await import('../mcp/db.js')
+    savePageViewport(data.pageId, data.x, data.y, data.zoom)
+    return { ok: true }
   })
 
 export const saveArtifactPositionFn = createServerFn({ method: 'POST' })

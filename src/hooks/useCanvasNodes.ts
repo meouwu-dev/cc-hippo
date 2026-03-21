@@ -160,12 +160,20 @@ export function useCanvasNodes(
 ) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
+  const [savedViewport, setSavedViewport] = useState<
+    { x: number; y: number; zoom: number } | null | undefined
+  >(undefined)
 
   const nodesRef = useRef<Node[]>([])
   const edgesRef = useRef<Edge[]>([])
 
   nodesRef.current = nodes
   edgesRef.current = edges
+
+  // Reset on page change
+  useEffect(() => {
+    setSavedViewport(undefined)
+  }, [pageId])
 
   // Load from relational tables on mount
   useEffect(() => {
@@ -178,6 +186,7 @@ export function useCanvasNodes(
 
       setNodes([...sectionNodes, ...artifactNodes])
       setEdges(flowEdges)
+      setSavedViewport(data.viewport)
     })
   }, [projectId, pageId])
 
@@ -620,5 +629,6 @@ export function useCanvasNodes(
     toggleMinimizeArtifact,
     closeSection,
     clearCanvas,
+    savedViewport,
   }
 }

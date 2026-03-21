@@ -121,6 +121,12 @@ export function getDb(): Database.Database {
     db.exec('ALTER TABLE chat_messages ADD COLUMN questions TEXT')
   }
 
+  if (!pageColumns.some((c) => c.name === 'viewport_x')) {
+    db.exec('ALTER TABLE pages ADD COLUMN viewport_x REAL')
+    db.exec('ALTER TABLE pages ADD COLUMN viewport_y REAL')
+    db.exec('ALTER TABLE pages ADD COLUMN viewport_zoom REAL')
+  }
+
   return db
 }
 
@@ -420,6 +426,9 @@ export interface PageRow {
   sort_order: number
   user_renamed: number
   created_at: string
+  viewport_x: number | null
+  viewport_y: number | null
+  viewport_zoom: number | null
 }
 
 export function createPage(
@@ -464,6 +473,18 @@ export function renamePage(
 export function deletePage(pageId: string): void {
   const db = getDb()
   db.prepare('DELETE FROM pages WHERE id = ?').run(pageId)
+}
+
+export function savePageViewport(
+  pageId: string,
+  x: number,
+  y: number,
+  zoom: number,
+): void {
+  const db = getDb()
+  db.prepare(
+    'UPDATE pages SET viewport_x = ?, viewport_y = ?, viewport_zoom = ? WHERE id = ?',
+  ).run(x, y, zoom, pageId)
 }
 
 export function ensureDefaultPage(projectId: string): PageRow {
