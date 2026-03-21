@@ -16,7 +16,8 @@ import ChatPanel from '../components/chat-panel.js'
 import ArtifactNode from '../components/artifact-node.js'
 import SectionNode from '../components/section-node.js'
 import { useChat } from '../hooks/useChat.js'
-import { useCanvasNodes, type ViewportInfo } from '../hooks/useCanvasNodes.js'
+import { useCanvasNodes  } from '../hooks/useCanvasNodes.js'
+import type {ViewportInfo} from '../hooks/useCanvasNodes.js';
 import { useProject } from '../hooks/useProject.js'
 import { useConversation } from '../hooks/useConversation.js'
 import { appMeta } from '../consts.js'
@@ -189,6 +190,7 @@ function CanvasApp({
     dismissQuestions,
     sendMessage: rawSendMessage,
     stop,
+    retry,
   } = useChat({
     projectId,
     conversationId: currentConversationId ?? '',
@@ -201,7 +203,10 @@ function CanvasApp({
 
   // Wrap sendMessage to inject current page context (like IDE file context)
   const sendMessage = useCallback(
-    (text: string, opts: { model?: string; effort?: string; references?: string[] } = {}) => {
+    (
+      text: string,
+      opts: { model?: string; effort?: string; references?: string[] } = {},
+    ) => {
       const currentPage = pages.find((p) => p.id === currentPageId)
       return rawSendMessage(text, {
         ...opts,
@@ -571,6 +576,18 @@ function CanvasApp({
           onClearPendingFocus={() => setPendingFocusPath(null)}
           pendingQuestions={pendingQuestions}
           dismissQuestions={dismissQuestions}
+          onRetry={(messageId) =>
+            retry(messageId, {
+              model:
+                currentConversation.model !== 'default'
+                  ? currentConversation.model
+                  : undefined,
+              effort:
+                currentConversation.effort !== 'default'
+                  ? currentConversation.effort
+                  : undefined,
+            })
+          }
         />
       )}
     </div>
@@ -610,6 +627,7 @@ interface CanvasPageProps {
   onClearPendingFocus: () => void
   pendingQuestions: ReturnType<typeof useChat>['pendingQuestions']
   dismissQuestions: ReturnType<typeof useChat>['dismissQuestions']
+  onRetry: (messageId: string) => void
 }
 
 function CanvasPage({
@@ -638,6 +656,7 @@ function CanvasPage({
   onClearPendingFocus,
   pendingQuestions,
   dismissQuestions,
+  onRetry,
 }: CanvasPageProps) {
   const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
   const viewportInfoRef = useRef<ViewportInfo | null>(null)
@@ -799,6 +818,7 @@ function CanvasPage({
           onArtifactClick={onArtifactClick}
           pendingQuestions={pendingQuestions}
           dismissQuestions={dismissQuestions}
+          onRetry={onRetry}
           selectedNodes={selectedNodes}
           onClearSelection={() => setSelectedNodes([])}
           onDeselectNode={(nodeId) =>
@@ -806,60 +826,57 @@ function CanvasPage({
           }
         />
       </div>
-      <div
-        className="flex-1"
-        onContextMenu={(e) => e.preventDefault()}
-      >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onMoveEnd={updateViewportInfo}
-        onInit={updateViewportInfo}
-        nodeTypes={nodeTypes}
-        fitView={false}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        minZoom={0.1}
-        maxZoom={3}
-        proOptions={{ hideAttribution: true }}
-        selectionOnDrag
-        selectionMode={SelectionMode.Partial}
-        panOnDrag={[2]}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        <div
-          className="group/minimap fixed bottom-4 right-0 z-10 flex items-end"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateX(0)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateX(calc(100% - 20px))'
-          }}
-          style={{
-            transform: 'translateX(calc(100% - 20px))',
-            transition: 'transform 0.25s ease',
-          }}
+      <div className="flex-1" onContextMenu={(e) => e.preventDefault()}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onMoveEnd={updateViewportInfo}
+          onInit={updateViewportInfo}
+          nodeTypes={nodeTypes}
+          fitView={false}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          minZoom={0.1}
+          maxZoom={3}
+          proOptions={{ hideAttribution: true }}
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={[2]}
         >
-          <div className="flex h-10 w-5 shrink-0 cursor-pointer items-center justify-center rounded-l-md bg-[#1a1a2e] text-xs text-white/60 shadow-md">
-            ‹
-          </div>
-          <MiniMap
-            nodeColor={(n) =>
-              n.type === 'section'
-                ? 'rgba(129, 140, 248, 0.3)'
-                : 'rgba(255, 255, 255, 0.2)'
-            }
-            maskColor="rgba(0, 0, 0, 0.7)"
-            style={{
-              background: '#1a1a2e',
-              position: 'relative',
-              margin: 0,
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          <div
+            className="group/minimap fixed bottom-4 right-0 z-10 flex items-end"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateX(0)'
             }}
-          />
-        </div>
-      </ReactFlow>
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateX(calc(100% - 20px))'
+            }}
+            style={{
+              transform: 'translateX(calc(100% - 20px))',
+              transition: 'transform 0.25s ease',
+            }}
+          >
+            <div className="flex h-10 w-5 shrink-0 cursor-pointer items-center justify-center rounded-l-md bg-[#1a1a2e] text-xs text-white/60 shadow-md">
+              ‹
+            </div>
+            <MiniMap
+              nodeColor={(n) =>
+                n.type === 'section'
+                  ? 'rgba(129, 140, 248, 0.3)'
+                  : 'rgba(255, 255, 255, 0.2)'
+              }
+              maskColor="rgba(0, 0, 0, 0.7)"
+              style={{
+                background: '#1a1a2e',
+                position: 'relative',
+                margin: 0,
+              }}
+            />
+          </div>
+        </ReactFlow>
       </div>
     </>
   )

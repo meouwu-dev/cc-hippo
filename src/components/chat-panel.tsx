@@ -14,6 +14,7 @@ import {
   Check,
   Sparkles,
   X,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from './ui/button.js'
 import {
@@ -69,11 +70,15 @@ interface ChatPanelProps {
   onModelChange: (model: string) => void
   onEffortChange: (effort: string) => void
   usage: UsageInfo | null
-  onSend: (text: string, opts: { model?: string; effort?: string; references?: string[] }) => void
+  onSend: (
+    text: string,
+    opts: { model?: string; effort?: string; references?: string[] },
+  ) => void
   onStop: () => void
   onArtifactClick: (file: ArtifactFile) => void
   pendingQuestions: UserQuestion[] | null
   dismissQuestions: () => void
+  onRetry?: (messageId: string) => void
   selectedNodes?: Node[]
   onClearSelection?: () => void
   onDeselectNode?: (nodeId: string) => void
@@ -297,7 +302,7 @@ function QuestionForm({
               const opt =
                 typeof raw === 'string'
                   ? raw
-                  : (raw as { label: string }).label ?? String(raw)
+                  : ((raw as { label: string }).label ?? String(raw))
               return (
                 <Button
                   key={opt}
@@ -389,6 +394,7 @@ export default function ChatPanel({
   onArtifactClick,
   pendingQuestions,
   dismissQuestions,
+  onRetry,
   selectedNodes = [],
   onClearSelection,
   onDeselectNode,
@@ -615,17 +621,49 @@ export default function ChatPanel({
                 )}
                 {messages.map((msg) =>
                   msg.role === 'user' ? (
-                    <div key={msg.id} className="flex justify-end">
+                    <div
+                      key={msg.id}
+                      className="group/user flex flex-col items-end"
+                    >
                       <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-border px-3 py-2 text-[13px] leading-relaxed text-foreground">
                         <Markdown>{msg.content}</Markdown>
                       </div>
+                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100">
+                        {msg.timestamp && (
+                          <span className="text-[10px] leading-none text-muted-foreground">
+                            {new Date(msg.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        )}
+                        {onRetry && !isStreaming && (
+                          <Tooltip>
+                            <TooltipTrigger
+                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              onClick={(e) => { e.preventDefault(); onRetry(msg.id) }}
+                            >
+                              <RotateCcw size={14} />
+                            </TooltipTrigger>
+                            <TooltipContent>Retry</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
                   ) : (
-                    <div key={msg.id} className="flex gap-2">
+                    <div key={msg.id} className="group/assistant flex gap-2">
                       <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted">
                         <Sparkles size={12} className="text-primary" />
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        {msg.timestamp && (
+                          <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/assistant:opacity-100">
+                            {new Date(msg.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        )}
                         {msg.thinking?.length ? (
                           <ThinkingBlock
                             blocks={msg.thinking}
@@ -675,9 +713,7 @@ export default function ChatPanel({
       <div className="flex shrink-0 flex-col gap-1.5 rounded-xl border border-border/50 bg-[var(--bg-surface)] p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
         {selectedNodes.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
-            <span className="text-[11px] text-muted-foreground">
-              Selected:
-            </span>
+            <span className="text-[11px] text-muted-foreground">Selected:</span>
             {selectedNodes.map((n) => {
               const data = n.data as ArtifactNodeData
               return (

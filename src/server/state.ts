@@ -27,19 +27,28 @@ export const loadCanvasDataFn = createServerFn({ method: 'POST' })
       await import('../mcp/db.js')
     const db = getDb()
     const page = db
-      .prepare('SELECT viewport_x, viewport_y, viewport_zoom FROM pages WHERE id = ?')
-      .get(data.pageId) as {
-      viewport_x: number | null
-      viewport_y: number | null
-      viewport_zoom: number | null
-    } | undefined
+      .prepare(
+        'SELECT viewport_x, viewport_y, viewport_zoom FROM pages WHERE id = ?',
+      )
+      .get(data.pageId) as
+      | {
+          viewport_x: number | null
+          viewport_y: number | null
+          viewport_zoom: number | null
+        }
+      | undefined
     return {
       artifacts: getArtifactsByPage(data.projectId, data.pageId),
       edges: getEdgesByPage(data.projectId, data.pageId),
       sections: getSections(data.projectId, data.pageId),
-      viewport: page?.viewport_x != null
-        ? { x: page.viewport_x, y: page.viewport_y!, zoom: page.viewport_zoom! }
-        : null,
+      viewport:
+        page?.viewport_x != null
+          ? {
+              x: page.viewport_x,
+              y: page.viewport_y!,
+              zoom: page.viewport_zoom!,
+            }
+          : null,
     }
   })
 

@@ -10,6 +10,7 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  timestamp?: number
   thinking?: string[]
   artifacts?: ArtifactFile[]
   questions?: UserQuestion[]
@@ -144,16 +145,19 @@ export function useChat({
         references?: string[]
       } = {},
     ) => {
+      const now = Date.now()
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
         content: text,
+        timestamp: now,
       }
 
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: '',
+        timestamp: now,
         thinking: [],
         artifacts: [],
       }
@@ -389,6 +393,24 @@ export function useChat({
     clearChatMessagesFn({ data: { conversationId } })
   }, [conversationId])
 
+  const retry = useCallback(
+    (messageId: string, opts: { model?: string; effort?: string } = {}) => {
+      if (isStreaming) return
+      const idx = messages.findIndex(
+        (m) => m.id === messageId && m.role === 'user',
+      )
+      if (idx === -1) return
+      const userMsg = messages[idx]
+      // Remove this user message + everything after it from UI
+      const trimmed = messages.slice(0, idx)
+      setMessages(trimmed)
+      persistMessages(trimmed)
+      // Resend the same message
+      sendMessage(userMsg.content, opts)
+    },
+    [isStreaming, messages, persistMessages, sendMessage],
+  )
+
   const dismissQuestions = useCallback(() => {
     setPendingQuestions(null)
     // Clear questions from the message so they don't reappear on refresh
@@ -412,6 +434,7 @@ export function useChat({
     dismissQuestions,
     sendMessage,
     stop,
+    retry,
     clearHistory,
   }
 }

@@ -103,10 +103,9 @@ export const chatStream = createServerFn({ method: 'POST' })
       ? `[User is viewing page: "${data.currentPageName}"${data.currentPageId ? ` (id: ${data.currentPageId})` : ''}]\n`
       : ''
 
-    const refContext =
-      data.references?.length
-        ? `[User selected these artifacts for reference: ${data.references.join(', ')}]\n`
-        : ''
+    const refContext = data.references?.length
+      ? `[User selected these artifacts for reference: ${data.references.join(', ')}]\n`
+      : ''
 
     // First message: send system instruction with the message
     // Subsequent messages: use --continue to resume session, just send the new message

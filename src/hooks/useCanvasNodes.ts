@@ -324,7 +324,11 @@ export function useCanvasNodes(
     )
 
     nextPosRef.current = {
-      x: isFinite(leftX) ? leftX : (vp ? vp.x + PANEL_OFFSET_PX / vp.zoom + GAP_X : PANEL_OFFSET_PX + GAP_X),
+      x: isFinite(leftX)
+        ? leftX
+        : vp
+          ? vp.x + PANEL_OFFSET_PX / vp.zoom + GAP_X
+          : PANEL_OFFSET_PX + GAP_X,
       y: bottomEdge + GAP_Y,
     }
   }, [viewportRef])
