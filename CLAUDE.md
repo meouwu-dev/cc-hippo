@@ -20,6 +20,7 @@ npm run check        # Prettier auto-fix + ESLint fix
 ### Server Function (`src/server/chat.ts`)
 
 The core backend — a TanStack Start `createServerFn` that:
+
 1. Receives chat message + history from the client
 2. Spawns `claude` CLI with `--output-format stream-json`
 3. Parses newline-delimited JSON events from stdout
@@ -28,6 +29,7 @@ The core backend — a TanStack Start `createServerFn` that:
 All Node.js imports (`child_process`, `fs`, `path`) **must** live inside the `.handler()` callback (dynamic imports). Top-level Node.js code breaks the client bundle since `createServerFn` modules are imported on both client and server.
 
 **Claude CLI gotchas captured in requirement.md:**
+
 - stdin MUST be `'ignore'` — otherwise claude hangs
 - Do NOT use `--include-partial-messages` — causes extreme slowness
 - Skip `result` events to avoid duplicate text

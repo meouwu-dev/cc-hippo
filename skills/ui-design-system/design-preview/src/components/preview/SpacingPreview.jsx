@@ -9,8 +9,13 @@ export function SpacingPreview({ spacing, radii }) {
           <div className="spacing-blocks">
             {Object.entries(spacing).map(([name, val]) => (
               <div key={name} className="spacing-block">
-                <div className="spacing-block__bar" style={{ width: val, height: val, minWidth: 8, minHeight: 8 }} />
-                <code>--{name}: {val}</code>
+                <div
+                  className="spacing-block__bar"
+                  style={{ width: val, height: val, minWidth: 8, minHeight: 8 }}
+                />
+                <code>
+                  --{name}: {val}
+                </code>
               </div>
             ))}
           </div>
@@ -23,13 +28,18 @@ export function SpacingPreview({ spacing, radii }) {
           <div className="radii-blocks">
             {Object.entries(radii).map(([name, val]) => (
               <div key={name} className="radii-block">
-                <div className="radii-block__box" style={{ borderRadius: val }} />
-                <code>--{name}: {val}</code>
+                <div
+                  className="radii-block__box"
+                  style={{ borderRadius: val }}
+                />
+                <code>
+                  --{name}: {val}
+                </code>
               </div>
             ))}
           </div>
         </div>
       )}
     </section>
-  );
+  )
 }

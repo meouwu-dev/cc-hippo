@@ -1,8 +1,12 @@
-import { ColorPalette } from './preview/ColorPalette';
-import { TypographyPreview } from './preview/TypographyPreview';
-import { SpacingPreview } from './preview/SpacingPreview';
-import { ComponentPreview } from './preview/ComponentPreview';
-import { downloadDesignMd, downloadTokensCSS, downloadTokensJSON } from '../lib/exportDesign';
+import { ColorPalette } from './preview/ColorPalette'
+import { TypographyPreview } from './preview/TypographyPreview'
+import { SpacingPreview } from './preview/SpacingPreview'
+import { ComponentPreview } from './preview/ComponentPreview'
+import {
+  downloadDesignMd,
+  downloadTokensCSS,
+  downloadTokensJSON,
+} from '../lib/exportDesign'
 
 export function PreviewPane({ tokens, messages }) {
   if (!tokens) {
@@ -14,7 +18,7 @@ export function PreviewPane({ tokens, messages }) {
           <p>Design tokens will appear here as the AI generates them.</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -22,16 +26,27 @@ export function PreviewPane({ tokens, messages }) {
       <div className="preview-header">
         <div className="preview-header__left">
           <h2>Live Preview</h2>
-          {tokens.aesthetic && <span className="preview-aesthetic">{tokens.aesthetic}</span>}
+          {tokens.aesthetic && (
+            <span className="preview-aesthetic">{tokens.aesthetic}</span>
+          )}
         </div>
         <div className="preview-downloads">
-          <button onClick={() => downloadDesignMd(messages)} title="Download full design as markdown">
+          <button
+            onClick={() => downloadDesignMd(messages)}
+            title="Download full design as markdown"
+          >
             DESIGN.md
           </button>
-          <button onClick={() => downloadTokensCSS(tokens)} title="Download CSS custom properties">
+          <button
+            onClick={() => downloadTokensCSS(tokens)}
+            title="Download CSS custom properties"
+          >
             .css
           </button>
-          <button onClick={() => downloadTokensJSON(tokens)} title="Download tokens as JSON">
+          <button
+            onClick={() => downloadTokensJSON(tokens)}
+            title="Download tokens as JSON"
+          >
             .json
           </button>
         </div>
@@ -55,5 +70,5 @@ export function PreviewPane({ tokens, messages }) {
         )}
       </div>
     </div>
-  );
+  )
 }

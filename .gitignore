@@ -13,3 +13,6 @@ __unconfig*
 todos.json
 output/
 data/
+
+# local claude notes
+.claude-local-notes/

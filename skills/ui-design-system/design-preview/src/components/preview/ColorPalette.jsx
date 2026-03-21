@@ -1,19 +1,28 @@
 export function ColorPalette({ colors }) {
   // Group colors by semantic category
-  const groups = {};
+  const groups = {}
   for (const [name, value] of Object.entries(colors)) {
-    const category = name.match(/primary/i) ? 'Primary'
-      : name.match(/secondary/i) ? 'Secondary'
-      : name.match(/accent/i) ? 'Accent'
-      : name.match(/neutral|gray|grey/i) ? 'Neutral'
-      : name.match(/success/i) ? 'Success'
-      : name.match(/warning/i) ? 'Warning'
-      : name.match(/error|danger/i) ? 'Error'
-      : name.match(/surface|bg|background/i) ? 'Surface'
-      : name.match(/text|foreground/i) ? 'Text'
-      : 'Other';
-    if (!groups[category]) groups[category] = [];
-    groups[category].push({ name, value });
+    const category = name.match(/primary/i)
+      ? 'Primary'
+      : name.match(/secondary/i)
+        ? 'Secondary'
+        : name.match(/accent/i)
+          ? 'Accent'
+          : name.match(/neutral|gray|grey/i)
+            ? 'Neutral'
+            : name.match(/success/i)
+              ? 'Success'
+              : name.match(/warning/i)
+                ? 'Warning'
+                : name.match(/error|danger/i)
+                  ? 'Error'
+                  : name.match(/surface|bg|background/i)
+                    ? 'Surface'
+                    : name.match(/text|foreground/i)
+                      ? 'Text'
+                      : 'Other'
+    if (!groups[category]) groups[category] = []
+    groups[category].push({ name, value })
   }
 
   return (
@@ -42,5 +51,5 @@ export function ColorPalette({ colors }) {
         ))}
       </div>
     </section>
-  );
+  )
 }

@@ -12,9 +12,5 @@
   "routerOnly": false,
   "version": 1,
   "framework": "react",
-  "chosenAddOns": [
-    "tanstack-query",
-    "compiler",
-    "eslint"
-  ]
+  "chosenAddOns": ["tanstack-query", "compiler", "eslint"]
 }

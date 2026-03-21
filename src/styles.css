@@ -1,9 +1,9 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
 @theme {
   --font-sans: system-ui, -apple-system, sans-serif;
-  --font-mono: "SF Mono", "Fira Code", monospace;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
 }
 
 :root {
@@ -21,7 +21,9 @@
   box-sizing: border-box;
 }
 
-html, body, #app {
+html,
+body,
+#app {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -37,19 +39,29 @@ html, body, #app {
   width: 100vw;
   height: 100vh;
   position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-app .react-flow {
+  flex: 1;
 }
 
 /* React Flow overrides */
-.react-flow__attribution { display: none; }
-.react-flow__background { opacity: 0.4; }
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__background {
+  opacity: 0.4;
+}
 
 /* ---- Chat Panel ---- */
 .chat-panel {
   position: fixed;
-  top: 16px;
+  top: 52px;
   left: 16px;
   width: 380px;
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 68px);
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -61,7 +73,7 @@ html, body, #app {
   resize: vertical;
 }
 
-.chat-panel[data-collapsed="true"] {
+.chat-panel[data-collapsed='true'] {
   max-height: fit-content;
   resize: none;
 }
@@ -237,13 +249,22 @@ html, body, #app {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Thinking block */
@@ -357,7 +378,9 @@ html, body, #app {
   border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 150ms, border-color 150ms;
+  transition:
+    background 150ms,
+    border-color 150ms;
 }
 
 .chat-choice-btn:hover:not(:disabled) {
@@ -435,7 +458,9 @@ html, body, #app {
   height: 12px !important;
   background: rgba(129, 140, 248, 0.5) !important;
   border: 2px solid var(--bg-surface) !important;
-  transition: background 200ms, transform 200ms;
+  transition:
+    background 200ms,
+    transform 200ms;
 }
 
 .artifact-handle:hover {
@@ -570,4 +595,193 @@ html, body, #app {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text);
+}
+
+/* ---- Page Tabs ---- */
+
+.page-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+}
+
+.page-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  font-size: 13px;
+  font-family: inherit;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  user-select: none;
+}
+
+.page-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.page-tab.active {
+  background: var(--bg-surface);
+  color: var(--text-bright);
+}
+
+.page-tab-input {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--text-bright);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+  outline: none;
+  width: 100px;
+}
+
+.page-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.page-tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.page-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.page-tab-add:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ---- Section Node ---- */
+
+.section-node {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed rgba(129, 140, 248, 0.3);
+  border-radius: 12px;
+  background: rgba(129, 140, 248, 0.04);
+  min-height: 300px;
+}
+
+.section-header {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-name {
+  cursor: default;
+  user-select: none;
+}
+
+.section-name-input {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--text-bright);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 2px 6px;
+  border-radius: 4px;
+  outline: none;
+  flex: 1;
+}
+
+.section-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.section-close-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- Device Preset ---- */
+
+.artifact-title-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.device-label {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(129, 140, 248, 0.15);
+  color: var(--accent);
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.device-selector {
+  display: flex;
+  gap: 1px;
+  margin-right: 4px;
+}
+
+.device-selector .artifact-tool-btn.active {
+  color: var(--accent);
+  background: rgba(129, 140, 248, 0.15);
+}
+
+/* ---- MiniMap ---- */
+
+.react-flow__minimap {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
 }

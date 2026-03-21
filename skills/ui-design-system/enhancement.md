@@ -18,9 +18,9 @@ This document captures a conversation about reviewing the `ui-design-system` ski
 
 ### Issues to Address
 
-1. **The skill may be too heavy for its trigger point.** The full output (7 steps, every screen specced with all states, full component library, animation catalog) is a LOT of document for what might be a user saying "design me a todo app." The "Scaling" section acknowledges this with quick/full/iterative modes, but it's buried. Should promote this decision to Step 1 — ask or infer the scope *before* doing anything else.
+1. **The skill may be too heavy for its trigger point.** The full output (7 steps, every screen specced with all states, full component library, animation catalog) is a LOT of document for what might be a user saying "design me a todo app." The "Scaling" section acknowledges this with quick/full/iterative modes, but it's buried. Should promote this decision to Step 1 — ask or infer the scope _before_ doing anything else.
 
-2. **Screen specifications before any visual validation is risky.** The process is waterfall: understand product → pick aesthetic → build full design system → spec every screen → define components → animation → build guide. Should validate the aesthetic direction and color palette *before* spending thousands of tokens speccing 8 screens in detail.
+2. **Screen specifications before any visual validation is risky.** The process is waterfall: understand product → pick aesthetic → build full design system → spec every screen → define components → animation → build guide. Should validate the aesthetic direction and color palette _before_ spending thousands of tokens speccing 8 screens in detail.
 
 3. **The output path `/mnt/user-data/outputs/DESIGN.md` is Claude.ai-specific.** In Claude Code, that path doesn't exist. Should use the project's working directory or let the user decide.
 
@@ -47,6 +47,7 @@ This prevents the most expensive failure mode: generating a 500-line DESIGN.md i
 ### Concept
 
 A React app with a split-screen layout:
+
 - **Left pane:** AI chat interface that calls the local `claude` CLI under the hood
 - **Right pane:** Live design system preview that renders tokens as they're generated
 

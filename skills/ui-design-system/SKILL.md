@@ -18,7 +18,7 @@ Before designing anything, establish context. You need to know:
 - **What does it do?** The core function in one sentence.
 - **Who is it for?** Specific user persona — age, technical skill, context of use.
 - **Where is it used?** Desktop, mobile, tablet, or responsive. This constrains layout fundamentally.
-- **What's the mood?** How should the user *feel* when using it? (calm, energized, focused, delighted, empowered)
+- **What's the mood?** How should the user _feel_ when using it? (calm, energized, focused, delighted, empowered)
 - **Any references?** Existing products, brands, or visuals the user likes.
 
 If the user's request is vague, ask targeted questions. If they've provided enough context (a product description, an existing document, or clear references), proceed directly — don't interrogate unnecessarily.
@@ -28,6 +28,7 @@ If the user's request is vague, ask targeted questions. If they've provided enou
 Read `references/aesthetics.md` to access the aesthetic library. This contains 20 curated design directions with characteristic tokens for each.
 
 Based on the product context, either:
+
 - **Match** one aesthetic directly (e.g., a developer tool → Terminal/Hacker or Dark Mode Elegance)
 - **Blend** two aesthetics with one as primary and one as accent (e.g., Swiss + Dark Mode for a data-heavy dashboard)
 - **Invent** a custom direction if the product doesn't fit existing categories — but ground it in specific token decisions, not vibes
@@ -41,11 +42,13 @@ Read `references/template.md` for the exact output structure. Follow it precisel
 Work through each section in order:
 
 **Color Palette** — Start here. Every other decision flows from color. Define semantic roles (primary, secondary, background, surface, text, muted, accent, status colors). Choose colors that:
+
 - Have sufficient contrast ratios (4.5:1 minimum for text on backgrounds)
 - Work together as a system, not just individually
 - Match the aesthetic direction's palette character
 
 **Typography** — Select font pairings. Always specify exact Google Fonts (or system fonts) that are freely available. Define the complete type scale with weights and sizes. Consider:
+
 - Display/heading font for personality
 - Body font for readability
 - Monospace font if the product shows code or data
@@ -60,6 +63,7 @@ Work through each section in order:
 ### Step 4: Specify Every Screen
 
 For each screen in the application:
+
 - **Purpose** — one clear sentence
 - **Layout** — spatial arrangement of regions
 - **Key Elements** — every visible element with exact dimensions, colors, typography, radius, shadow
@@ -72,6 +76,7 @@ A screen spec is good when a developer can build it from the description alone w
 ### Step 5: Define Components
 
 Specify each reusable component:
+
 - All variants (primary, secondary, ghost, danger, etc.)
 - Anatomy (sub-elements)
 - All states (default, hover, active, focused, disabled)
@@ -82,6 +87,7 @@ Only specify components the product actually uses. Don't pad with components tha
 ### Step 6: Design the Motion System
 
 Motion is not decoration — it communicates relationships, hierarchy, and state changes. Define:
+
 - Motion principles (bouncy? restrained? cinematic?)
 - Easing curves (provide exact `cubic-bezier` values)
 - Duration scale (from instant to slow)
@@ -92,6 +98,7 @@ Match the motion character to the aesthetic. Kawaii = bouncy springs. Luxury = s
 ### Step 7: Write the Build Guide
 
 Recommend:
+
 - Technology stack (React, HTML+CSS, Vue, Svelte, etc.)
 - Build order (which screen/component first and why)
 - Technical notes (font loading, accessibility, performance)
@@ -101,6 +108,7 @@ Recommend:
 Save the complete DESIGN.md to `/mnt/user-data/outputs/DESIGN.md` (or a more specific filename if the user has a product name). Also present the full content in the conversation so the user can review it inline.
 
 The document uses collapsible `<details>` blocks to keep it scannable:
+
 - Product Overview, Screens, and Key Flows are always visible
 - Design System, Screen Specifications, Component Library, Interaction System, and Build Guide are collapsed
 
@@ -130,6 +138,7 @@ Before presenting the final document, verify:
 This skill produces DESIGN.md — a design specification document. It does NOT produce code.
 
 When the user wants to go from design to implementation:
+
 - The `frontend-design` skill can consume this DESIGN.md to produce high-quality code
 - The design tokens CSS block is directly copy-pasteable into any project
 - The document format is compatible with Google Stitch's DESIGN.md import feature and similar AI design tools

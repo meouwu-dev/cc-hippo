@@ -419,9 +419,15 @@
   margin: 16px 0 8px;
 }
 
-.markdown-node__content h1 { font-size: 18px; }
-.markdown-node__content h2 { font-size: 15px; }
-.markdown-node__content h3 { font-size: 13px; }
+.markdown-node__content h1 {
+  font-size: 18px;
+}
+.markdown-node__content h2 {
+  font-size: 15px;
+}
+.markdown-node__content h3 {
+  font-size: 13px;
+}
 
 .markdown-node__content p {
   margin: 8px 0;

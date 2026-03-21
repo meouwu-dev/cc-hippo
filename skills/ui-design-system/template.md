@@ -6,7 +6,7 @@ This is the canonical structure for every design system document produced by thi
 
 ## Template Structure
 
-```markdown
+````markdown
 # [Product Name]
 
 ## Product Overview
@@ -35,7 +35,7 @@ Bulleted list of every screen/view in the application, with a short description 
 
 ## Key Flows
 
-For each major user journey, write a numbered step-by-step narrative. These flows anchor the design decisions — they show *how* screens connect and *why* components exist.
+For each major user journey, write a numbered step-by-step narrative. These flows anchor the design decisions — they show _how_ screens connect and _why_ components exist.
 
 **[Flow Name]:** [One-line goal, e.g., "User wants to create a new project"]
 
@@ -140,6 +140,7 @@ Provide a complete `:root` block with ALL tokens — colors, fonts, radii, shado
   --shadow-hover: ...;
 }
 ```
+````
 
 </details>
 
@@ -158,11 +159,13 @@ For EACH screen listed in the Screens section, provide a specification block:
 
 **Key Elements:**
 Describe each visual element on the screen with enough precision that a developer can build it without guesswork:
+
 - **[Element Name]:** [Dimensions], [colors], [typography], [radius], [shadow]. Describe how it looks.
 - Repeat for all visible elements.
 
 **States:**
 Define each meaningful state the screen can be in:
+
 - **Empty:** What the user sees before content exists.
 - **Loading:** Skeleton/shimmer behavior.
 - **Populated:** Default state with content.
@@ -171,14 +174,17 @@ Define each meaningful state the screen can be in:
 
 **Components:**
 List reusable UI components visible on this screen. Describe each:
+
 - **[Component Name]:** Appearance, dimensions, variants.
 
 **Interactions:**
 Describe every interactive behavior:
+
 - **[Trigger] (e.g., Hover Card):** [What happens visually]
 - **[Trigger] (e.g., Click Submit):** [What happens visually]
 
 **Responsive (if applicable):**
+
 - **Desktop:** [Layout behavior]
 - **Tablet:** [Layout behavior]
 - **Mobile:** [Layout behavior]
@@ -199,12 +205,14 @@ For each reusable component, provide a specification:
 **Variants:** [e.g., primary / secondary / ghost / danger]
 
 **Anatomy:**
+
 - [Sub-element]: [Appearance description]
 - [Sub-element]: [Appearance description]
 
 **Dimensions:** [Width, height, padding, icon size]
 
 **States:**
+
 - **Default:** [Appearance]
 - **Hover:** [What changes]
 - **Active/Pressed:** [What changes]
@@ -214,6 +222,7 @@ For each reusable component, provide a specification:
 **Spacing rules:** [Margin between instances, gap from other elements]
 
 Repeat for each component. Common components to specify:
+
 - Button (+ variants)
 - Input / Text Field
 - Card
@@ -259,6 +268,7 @@ Describe the overall motion philosophy in 2-3 sentences. Is motion bouncy? Restr
 For each significant interaction pattern:
 
 ### [Interaction Name, e.g., "Card Hover Lift"]
+
 - **Trigger:** [e.g., mouse enter on card]
 - **Properties animated:** [e.g., transform, box-shadow]
 - **From → To:** [e.g., `translateY(0) → translateY(-4px)`, shadow-md → shadow-hover]
@@ -266,6 +276,7 @@ For each significant interaction pattern:
 - **Easing:** [e.g., default]
 
 ### [Interaction Name, e.g., "Modal Open"]
+
 - **Trigger:** [e.g., click detail link]
 - **Sequence:**
   1. Backdrop fades in (opacity 0→1, 200ms)
@@ -275,11 +286,13 @@ For each significant interaction pattern:
 Repeat for each interaction.
 
 ## Scroll Behaviors (if applicable)
+
 - **Sticky elements:** [What sticks and when]
 - **Parallax:** [Which elements, speed ratios]
 - **Scroll-triggered reveals:** [Animation type, trigger threshold]
 
 ## Loading Patterns
+
 - **Skeleton screens:** [Shimmer direction, color, shape]
 - **Spinners/Progress:** [Style, placement]
 - **Content transitions:** [How content fades/slides in when loaded]
@@ -295,12 +308,14 @@ Repeat for each interaction.
 
 **Build Order:**
 Numbered list of which screens/components to build first and why. Order should minimize rework:
+
 1. **[First thing]:** [Why this goes first]
 2. **[Second thing]:** [Why this goes next]
 3. Continue...
 
 **Key Technical Notes:**
 Any implementation-specific guidance:
+
 - Font loading strategy
 - Image/asset handling
 - Accessibility requirements
