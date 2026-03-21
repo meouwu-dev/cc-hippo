@@ -175,6 +175,24 @@ export const chatStream = createServerFn({ method: 'POST' })
           return `Searching for: ${input.pattern || ''}`
         case 'Bash':
           return `Running command...`
+        case 'mcp__seal__askUser':
+          return 'Asking you a question...'
+        case 'mcp__seal__saveArtifact':
+          return `Saving artifact: ${input.filename || input.path || ''}`
+        case 'mcp__seal__linkArtifacts':
+          return 'Linking artifacts...'
+        case 'mcp__seal__getArtifacts':
+          return 'Checking existing artifacts...'
+        case 'mcp__seal__getRelationships':
+          return 'Checking relationships...'
+        case 'mcp__seal__listPages':
+          return 'Checking pages...'
+        case 'mcp__seal__createPage':
+          return `Creating page: ${input.name || ''}`
+        case 'mcp__seal__renamePage':
+          return `Renaming page to: ${input.name || ''}`
+        case 'mcp__seal__switchPage':
+          return 'Navigating to page...'
         default:
           return `Using ${name}...`
       }
