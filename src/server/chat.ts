@@ -17,7 +17,8 @@ export const chatStream = createServerFn({ method: 'POST' })
     const fs = await import('node:fs')
     const { fileURLToPath } = await import('node:url')
 
-    const { getAllEdges, getOrCreateSessionId } = await import('../mcp/db.js')
+    const { getAllEdges, getAllArtifacts, getOrCreateSessionId } =
+      await import('../mcp/db.js')
 
     const __dirname = path.dirname(fileURLToPath(import.meta.url))
     const projectRoot = path.resolve(__dirname, '../..')
@@ -302,13 +303,19 @@ export const chatStream = createServerFn({ method: 'POST' })
           // Read relationships from SQLite (created by MCP server)
           try {
             const edges = getAllEdges(data.projectId)
+            const artifacts = getAllArtifacts(data.projectId)
+            const artifactById = new Map(artifacts.map((a) => [a.id, a]))
             for (const edge of edges) {
-              send({
-                type: 'edge',
-                source: edge.source_path,
-                target: edge.target_path,
-                kind: edge.kind,
-              })
+              const source = artifactById.get(edge.source_artifact_id)
+              const target = artifactById.get(edge.target_artifact_id)
+              if (source && target) {
+                send({
+                  type: 'edge',
+                  source: source.path,
+                  target: target.path,
+                  kind: edge.kind,
+                })
+              }
             }
           } catch (err) {
             console.error('[chat] Failed to read edges from SQLite:', err)

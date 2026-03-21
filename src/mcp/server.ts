@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import {
   upsertArtifact,
-  insertEdge,
+  insertEdgeByPath,
   getAllArtifacts,
   getAllEdges,
 } from './db.js'
@@ -55,7 +55,7 @@ server.registerTool(
     },
   },
   async ({ source_path, target_path, kind }) => {
-    insertEdge(projectId, source_path, target_path, kind)
+    insertEdgeByPath(projectId, source_path, target_path, kind)
     return {
       content: [
         {
@@ -108,9 +108,14 @@ server.registerTool(
     },
   },
   async ({ path }) => {
+    const allArtifacts = getAllArtifacts(projectId)
+    const byId = new Map(allArtifacts.map((a) => [a.id, a.path]))
     const edges = getAllEdges(projectId, path)
     const summary = edges
-      .map((e) => `${e.source_path} --${e.kind}--> ${e.target_path}`)
+      .map(
+        (e) =>
+          `${byId.get(e.source_artifact_id) ?? e.source_artifact_id} --${e.kind}--> ${byId.get(e.target_artifact_id) ?? e.target_artifact_id}`,
+      )
       .join('\n')
     return {
       content: [

@@ -20,6 +20,52 @@ export const loadState = createServerFn({ method: 'POST' })
     }
   })
 
+export const loadCanvasDataFn = createServerFn({ method: 'POST' })
+  .inputValidator((input: { projectId: string; pageId: string }) => input)
+  .handler(async ({ data }) => {
+    const { getArtifactsByPage, getEdgesByPage, getSections } =
+      await import('../mcp/db.js')
+    return {
+      artifacts: getArtifactsByPage(data.projectId, data.pageId),
+      edges: getEdgesByPage(data.projectId, data.pageId),
+      sections: getSections(data.projectId, data.pageId),
+    }
+  })
+
+export const saveArtifactPositionFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: {
+      artifactId: string
+      x: number
+      y: number
+      w: number
+      h: number
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { updateArtifactPosition } = await import('../mcp/db.js')
+    updateArtifactPosition(data.artifactId, data.x, data.y, data.w, data.h)
+    return { ok: true }
+  })
+
+export const saveArtifactMinimizedFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: {
+      artifactId: string
+      minimized: boolean
+      preMinimizeHeight?: number | null
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { updateArtifactMinimized } = await import('../mcp/db.js')
+    updateArtifactMinimized(
+      data.artifactId,
+      data.minimized,
+      data.preMinimizeHeight,
+    )
+    return { ok: true }
+  })
+
 export const loadProjects = createServerFn({ method: 'GET' }).handler(
   async () => {
     const { getAllProjects } = await import('../mcp/db.js')
@@ -158,40 +204,6 @@ export const clearChatMessagesFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const { deleteChatMessages } = await import('../mcp/db.js')
     deleteChatMessages(data.conversationId)
-    return { ok: true }
-  })
-
-// ---- Canvas State ----
-
-export const loadCanvasStateFn = createServerFn({ method: 'POST' })
-  .inputValidator((input: { projectId: string; pageId: string }) => input)
-  .handler(async ({ data }) => {
-    const { getCanvasState } = await import('../mcp/db.js')
-    const row = getCanvasState(data.projectId, data.pageId)
-    if (!row) return { nodes: [], edges: [] }
-    return { nodes: JSON.parse(row.nodes), edges: JSON.parse(row.edges) }
-  })
-
-export const saveCanvasStateFn = createServerFn({ method: 'POST' })
-  .inputValidator(
-    (input: {
-      projectId: string
-      pageId: string
-      nodes: unknown[]
-      edges: unknown[]
-    }) => input,
-  )
-  .handler(async ({ data }) => {
-    const { saveCanvasState } = await import('../mcp/db.js')
-    saveCanvasState(data.projectId, data.pageId, data.nodes, data.edges)
-    return { ok: true }
-  })
-
-export const clearCanvasStateFn = createServerFn({ method: 'POST' })
-  .inputValidator((input: { projectId: string; pageId: string }) => input)
-  .handler(async ({ data }) => {
-    const { deleteCanvasState } = await import('../mcp/db.js')
-    deleteCanvasState(data.projectId, data.pageId)
     return { ok: true }
   })
 

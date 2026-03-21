@@ -3,7 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 const DB_DIR = path.resolve(import.meta.dirname ?? '.', '../../data')
-const DB_PATH = path.join(DB_DIR, 'seal.db')
+const DB_PATH = path.join(DB_DIR, 'app.db')
 
 let db: Database.Database | null = null
 
@@ -35,13 +35,30 @@ export function getDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS pages (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT 'Page 1',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS artifacts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      section_id TEXT,
       path TEXT NOT NULL,
       filename TEXT NOT NULL,
       content TEXT NOT NULL DEFAULT '',
       type TEXT NOT NULL DEFAULT 'other',
+      device_preset TEXT,
+      position_x REAL NOT NULL DEFAULT 0,
+      position_y REAL NOT NULL DEFAULT 0,
+      width REAL NOT NULL DEFAULT 480,
+      height REAL NOT NULL DEFAULT 400,
+      minimized INTEGER NOT NULL DEFAULT 0,
+      pre_minimize_height REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(project_id, path)
@@ -50,19 +67,11 @@ export function getDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS edges (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      source_path TEXT NOT NULL,
-      target_path TEXT NOT NULL,
+      source_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+      target_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
       kind TEXT NOT NULL DEFAULT 'references',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(project_id, source_path, target_path)
-    );
-
-    CREATE TABLE IF NOT EXISTS pages (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      name TEXT NOT NULL DEFAULT 'Page 1',
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      UNIQUE(project_id, source_artifact_id, target_artifact_id)
     );
 
     CREATE TABLE IF NOT EXISTS sections (
@@ -91,32 +100,7 @@ export function getDb(): Database.Database {
       artifacts TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-
-    CREATE TABLE IF NOT EXISTS canvas_state (
-      project_id TEXT NOT NULL,
-      page_id TEXT NOT NULL,
-      nodes TEXT NOT NULL DEFAULT '[]',
-      edges TEXT NOT NULL DEFAULT '[]',
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (project_id, page_id),
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-    );
   `)
-
-  // Add columns to artifacts if they don't exist yet
-  const cols = db.prepare('PRAGMA table_info(artifacts)').all() as {
-    name: string
-  }[]
-  const colNames = new Set(cols.map((c) => c.name))
-  if (!colNames.has('page_id')) {
-    db.exec('ALTER TABLE artifacts ADD COLUMN page_id TEXT')
-  }
-  if (!colNames.has('section_id')) {
-    db.exec('ALTER TABLE artifacts ADD COLUMN section_id TEXT')
-  }
-  if (!colNames.has('device_preset')) {
-    db.exec('ALTER TABLE artifacts ADD COLUMN device_preset TEXT')
-  }
 
   return db
 }
@@ -228,13 +212,19 @@ export function getOrCreateSessionId(conversationId: string): string {
 export interface ArtifactRow {
   id: string
   project_id: string
+  page_id: string
+  section_id: string | null
   path: string
   filename: string
   content: string
   type: string
-  page_id: string | null
-  section_id: string | null
   device_preset: string | null
+  position_x: number
+  position_y: number
+  width: number
+  height: number
+  minimized: number
+  pre_minimize_height: number | null
   created_at: string
   updated_at: string
 }
@@ -250,8 +240,10 @@ export function upsertArtifact(
   devicePreset?: string | null,
 ) {
   const db = getDb()
+  // If no pageId provided, use the default page
+  const resolvedPageId = pageId ?? ensureDefaultPage(projectId).id
   db.prepare(
-    `INSERT INTO artifacts (id, project_id, path, filename, content, type, page_id, section_id, device_preset)
+    `INSERT INTO artifacts (id, project_id, page_id, path, filename, content, type, section_id, device_preset)
      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(project_id, path) DO UPDATE SET
        filename = excluded.filename,
@@ -263,11 +255,11 @@ export function upsertArtifact(
        updated_at = datetime('now')`,
   ).run(
     projectId,
+    resolvedPageId,
     artifactPath,
     filename,
     content,
     type,
-    pageId ?? null,
     sectionId ?? null,
     devicePreset ?? null,
   )
@@ -288,6 +280,16 @@ export function getAllArtifacts(
     .all(projectId) as ArtifactRow[]
 }
 
+export function getArtifactsByPage(
+  projectId: string,
+  pageId: string,
+): ArtifactRow[] {
+  const db = getDb()
+  return db
+    .prepare('SELECT * FROM artifacts WHERE project_id = ? AND page_id = ?')
+    .all(projectId, pageId) as ArtifactRow[]
+}
+
 export function getArtifactByPath(
   projectId: string,
   artifactPath: string,
@@ -298,28 +300,75 @@ export function getArtifactByPath(
     .get(projectId, artifactPath) as ArtifactRow | undefined
 }
 
+export function updateArtifactPosition(
+  id: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  const db = getDb()
+  db.prepare(
+    "UPDATE artifacts SET position_x = ?, position_y = ?, width = ?, height = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(x, y, w, h, id)
+}
+
+export function updateArtifactMinimized(
+  id: string,
+  minimized: boolean,
+  preMinimizeHeight?: number | null,
+): void {
+  const db = getDb()
+  db.prepare(
+    "UPDATE artifacts SET minimized = ?, pre_minimize_height = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(minimized ? 1 : 0, preMinimizeHeight ?? null, id)
+}
+
 // ---- Edges ----
 
 export interface EdgeRow {
   id: string
   project_id: string
-  source_path: string
-  target_path: string
+  source_artifact_id: string
+  target_artifact_id: string
   kind: string
   created_at: string
 }
 
 export function insertEdge(
   projectId: string,
-  sourcePath: string,
-  targetPath: string,
+  sourceArtifactId: string,
+  targetArtifactId: string,
   kind = 'references',
 ) {
   const db = getDb()
   db.prepare(
-    `INSERT OR IGNORE INTO edges (id, project_id, source_path, target_path, kind)
+    `INSERT OR IGNORE INTO edges (id, project_id, source_artifact_id, target_artifact_id, kind)
      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)`,
-  ).run(projectId, sourcePath, targetPath, kind)
+  ).run(projectId, sourceArtifactId, targetArtifactId, kind)
+}
+
+export function insertEdgeByPath(
+  projectId: string,
+  sourcePath: string,
+  targetPath: string,
+  kind = 'references',
+) {
+  const source = getArtifactByPath(projectId, sourcePath)
+  const target = getArtifactByPath(projectId, targetPath)
+  if (!source || !target) return
+  insertEdge(projectId, source.id, target.id, kind)
+}
+
+export function getEdgesByPage(projectId: string, pageId: string): EdgeRow[] {
+  const db = getDb()
+  return db
+    .prepare(
+      `SELECT e.* FROM edges e
+       JOIN artifacts sa ON e.source_artifact_id = sa.id
+       WHERE e.project_id = ? AND sa.page_id = ?`,
+    )
+    .all(projectId, pageId) as EdgeRow[]
 }
 
 export function getAllEdges(
@@ -328,11 +377,13 @@ export function getAllEdges(
 ): EdgeRow[] {
   const db = getDb()
   if (artifactPath) {
+    const artifact = getArtifactByPath(projectId, artifactPath)
+    if (!artifact) return []
     return db
       .prepare(
-        'SELECT * FROM edges WHERE project_id = ? AND (source_path = ? OR target_path = ?)',
+        'SELECT * FROM edges WHERE project_id = ? AND (source_artifact_id = ? OR target_artifact_id = ?)',
       )
-      .all(projectId, artifactPath, artifactPath) as EdgeRow[]
+      .all(projectId, artifact.id, artifact.id) as EdgeRow[]
   }
   return db
     .prepare('SELECT * FROM edges WHERE project_id = ?')
@@ -390,12 +441,7 @@ export function ensureDefaultPage(projectId: string): PageRow {
     .get(projectId) as PageRow | undefined
   if (existing) return existing
 
-  const page = createPage(projectId, 'Page 1', 0)
-  // Migrate orphaned artifacts to this page
-  db.prepare(
-    'UPDATE artifacts SET page_id = ? WHERE project_id = ? AND page_id IS NULL',
-  ).run(page.id, projectId)
-  return page
+  return createPage(projectId, 'Page 1', 0)
 }
 
 // ---- Sections ----
@@ -520,44 +566,6 @@ export function deleteChatMessages(conversationId: string): void {
   db.prepare('DELETE FROM chat_messages WHERE conversation_id = ?').run(
     conversationId,
   )
-}
-
-// ---- Canvas State ----
-
-export function getCanvasState(
-  projectId: string,
-  pageId: string,
-): { nodes: string; edges: string } | undefined {
-  const db = getDb()
-  return db
-    .prepare(
-      'SELECT nodes, edges FROM canvas_state WHERE project_id = ? AND page_id = ?',
-    )
-    .get(projectId, pageId) as { nodes: string; edges: string } | undefined
-}
-
-export function saveCanvasState(
-  projectId: string,
-  pageId: string,
-  nodes: unknown[],
-  edges: unknown[],
-): void {
-  const db = getDb()
-  db.prepare(
-    `INSERT INTO canvas_state (project_id, page_id, nodes, edges)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(project_id, page_id) DO UPDATE SET
-       nodes = excluded.nodes,
-       edges = excluded.edges,
-       updated_at = datetime('now')`,
-  ).run(projectId, pageId, JSON.stringify(nodes), JSON.stringify(edges))
-}
-
-export function deleteCanvasState(projectId: string, pageId: string): void {
-  const db = getDb()
-  db.prepare(
-    'DELETE FROM canvas_state WHERE project_id = ? AND page_id = ?',
-  ).run(projectId, pageId)
 }
 
 // ---- App State ----

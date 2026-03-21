@@ -9,11 +9,12 @@ import type {
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { ArtifactFile } from './useChat.js'
 import {
-  loadCanvasStateFn,
-  saveCanvasStateFn,
-  clearCanvasStateFn,
+  loadCanvasDataFn,
+  saveArtifactPositionFn,
+  saveArtifactMinimizedFn,
 } from '../server/state.js'
 import type { SectionNodeData } from '../components/section-node.js'
+import type { ArtifactRow, EdgeRow, SectionRow } from '../mcp/db.js'
 
 export type DevicePreset = 'desktop' | 'tablet' | 'mobile'
 
@@ -26,18 +27,14 @@ export const DEVICE_PRESETS: Record<
   mobile: { w: 390, h: 844, label: 'Mobile 390×844' },
 }
 
-// No scale factor — render at 1:1 like Figma, use canvas zoom to navigate
-
 export interface ArtifactNodeData extends Record<string, unknown> {
   file: ArtifactFile
   label: string
+  artifactId: string
   devicePreset?: DevicePreset
   minimized?: boolean
   preMinimizeHeight?: number
 }
-
-// Debounce timer for canvas state persistence
-let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 const EDGE_COLORS: Record<string, string> = {
   references: '#888',
@@ -59,8 +56,89 @@ function getDeviceNodeSize(preset?: DevicePreset) {
   const p = DEVICE_PRESETS[preset]
   return {
     width: p.w,
-    height: p.h + 36, // +36 for titlebar
+    height: p.h + 36,
   }
+}
+
+// Convert DB rows to React Flow nodes/edges
+function artifactToNode(a: ArtifactRow): Node {
+  return {
+    id: `artifact-${a.path}`,
+    type: 'artifact',
+    position: { x: a.position_x, y: a.position_y },
+    data: {
+      file: {
+        path: a.path,
+        filename: a.filename,
+        content: a.content,
+        version: 1,
+      },
+      label: a.filename,
+      artifactId: a.id,
+      devicePreset: a.device_preset as DevicePreset | undefined,
+      minimized: a.minimized === 1,
+      preMinimizeHeight: a.pre_minimize_height ?? undefined,
+    } satisfies ArtifactNodeData,
+    style: {
+      width: a.width,
+      height: a.minimized ? 36 : a.height,
+    },
+    parentId: a.section_id ? `section-${a.section_id}` : undefined,
+  }
+}
+
+function sectionToNode(s: SectionRow): Node {
+  return {
+    id: `section-${s.id}`,
+    type: 'section',
+    position: { x: s.position_x, y: s.position_y },
+    data: {
+      label: s.name,
+      sectionId: s.id,
+      pageId: s.page_id,
+    } satisfies SectionNodeData,
+    style: { width: s.width, height: s.height },
+  }
+}
+
+function edgeRowToEdge(e: EdgeRow, artifacts: ArtifactRow[]): Edge | null {
+  const source = artifacts.find((a) => a.id === e.source_artifact_id)
+  const target = artifacts.find((a) => a.id === e.target_artifact_id)
+  if (!source || !target) return null
+  const sourceId = `artifact-${source.path}`
+  const targetId = `artifact-${target.path}`
+  const edgeStyle = getEdgeStyle(e.kind)
+  return {
+    id: `e-${sourceId}-${targetId}`,
+    source: sourceId,
+    target: targetId,
+    label: e.kind || undefined,
+    animated: e.kind === 'implements',
+    ...edgeStyle,
+  }
+}
+
+// Debounce helper for position saves
+const positionTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function debouncedSavePosition(
+  artifactId: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  const existing = positionTimers.get(artifactId)
+  if (existing) clearTimeout(existing)
+  positionTimers.set(
+    artifactId,
+    setTimeout(() => {
+      positionTimers.delete(artifactId)
+      saveArtifactPositionFn({
+        data: { artifactId, x, y, w, h },
+      })
+    }, 500),
+  )
 }
 
 export function useCanvasNodes(projectId: string, pageId: string) {
@@ -70,78 +148,86 @@ export function useCanvasNodes(projectId: string, pageId: string) {
   const nodesRef = useRef<Node[]>([])
   const edgesRef = useRef<Edge[]>([])
 
-  // Keep refs in sync
   nodesRef.current = nodes
   edgesRef.current = edges
 
-  // Load from SQLite on mount
+  // Load from relational tables on mount
   useEffect(() => {
-    loadCanvasStateFn({ data: { projectId, pageId } }).then((state) => {
-      if (state.nodes?.length) setNodes(state.nodes as Node[])
-      if (state.edges?.length) setEdges(state.edges as Edge[])
+    loadCanvasDataFn({ data: { projectId, pageId } }).then((data) => {
+      const sectionNodes = data.sections.map(sectionToNode)
+      const artifactNodes = data.artifacts.map(artifactToNode)
+      const flowEdges = data.edges
+        .map((e) => edgeRowToEdge(e, data.artifacts))
+        .filter((e): e is Edge => e !== null)
+
+      setNodes([...sectionNodes, ...artifactNodes])
+      setEdges(flowEdges)
     })
   }, [projectId, pageId])
 
-  const persistCanvas = useCallback(() => {
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      saveCanvasStateFn({
-        data: {
-          projectId,
-          pageId,
-          nodes: nodesRef.current,
-          edges: edgesRef.current,
-        },
-      })
-    }, 500)
-  }, [projectId, pageId])
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((prev) => {
+      const next = applyNodeChanges(changes, prev)
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((prev) => {
-        const next = applyNodeChanges(changes, prev)
-        persistCanvas()
-        return next
-      })
-    },
-    [persistCanvas],
-  )
-
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
-      setEdges((prev) => {
-        const next = applyEdgeChanges(changes, prev)
-        persistCanvas()
-        return next
-      })
-    },
-    [persistCanvas],
-  )
-
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const edge: Edge = {
-        id: `e-${connection.source}-${connection.target}`,
-        source: connection.source,
-        target: connection.target,
-        sourceHandle: connection.sourceHandle,
-        targetHandle: connection.targetHandle,
-        animated: true,
-        style: { stroke: '#666', strokeWidth: 2 },
-      }
-      setEdges((prev) => {
-        if (
-          prev.some((e) => e.source === edge.source && e.target === edge.target)
-        ) {
-          return prev
+      // Persist position/dimension changes for artifact nodes
+      for (const change of changes) {
+        if (change.type === 'position' && change.position) {
+          const node = next.find((n) => n.id === change.id) as Node | undefined
+          if (node?.type === 'artifact') {
+            const d = node.data as ArtifactNodeData
+            const w = (node.style?.width as number) || 480
+            const h = (node.style?.height as number) || 400
+            debouncedSavePosition(
+              d.artifactId,
+              change.position.x,
+              change.position.y,
+              w,
+              h,
+            )
+          }
         }
-        const next = [...prev, edge]
-        persistCanvas()
-        return next
-      })
-    },
-    [persistCanvas],
-  )
+        if (change.type === 'dimensions' && change.dimensions) {
+          const node = next.find((n) => n.id === change.id)
+          if (node?.type === 'artifact') {
+            const d = node.data as ArtifactNodeData
+            debouncedSavePosition(
+              d.artifactId,
+              node.position.x,
+              node.position.y,
+              change.dimensions.width,
+              change.dimensions.height,
+            )
+          }
+        }
+      }
+
+      return next
+    })
+  }, [])
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((prev) => applyEdgeChanges(changes, prev))
+  }, [])
+
+  const onConnect = useCallback((connection: Connection) => {
+    const edge: Edge = {
+      id: `e-${connection.source}-${connection.target}`,
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
+      animated: true,
+      style: { stroke: '#666', strokeWidth: 2 },
+    }
+    setEdges((prev) => {
+      if (
+        prev.some((e) => e.source === edge.source && e.target === edge.target)
+      ) {
+        return prev
+      }
+      return [...prev, edge]
+    })
+  }, [])
 
   const addEdge = useCallback(
     (sourcePath: string, targetPath: string, kind?: string) => {
@@ -160,80 +246,78 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           animated: kind === 'implements',
           ...edgeStyle,
         }
-        const next = [...prev, edge]
-        persistCanvas()
-        return next
+        return [...prev, edge]
       })
     },
-    [persistCanvas],
+    [],
   )
 
-  const openArtifact = useCallback(
-    (file: ArtifactFile) => {
-      setNodes((prev) => {
-        const existingIdx = prev.findIndex(
-          (n) =>
-            n.type === 'artifact' &&
-            (n.data as ArtifactNodeData).file.path === file.path,
-        )
-        if (existingIdx !== -1) {
-          const existing = prev[existingIdx]
-          const wasMinimized = (existing.data as ArtifactNodeData).minimized
-          const next = prev.map((n, i) => {
-            if (i !== existingIdx) return n
-            const d = n.data as ArtifactNodeData
-            if (wasMinimized) {
-              // Restore from minimized
-              const restoreH = d.preMinimizeHeight || 400
-              return {
-                ...n,
-                data: {
-                  ...d,
-                  file,
-                  minimized: false,
-                  preMinimizeHeight: undefined,
-                },
-                style: { ...n.style, height: restoreH },
-              }
+  const openArtifact = useCallback((file: ArtifactFile) => {
+    setNodes((prev) => {
+      const existingIdx = prev.findIndex(
+        (n) =>
+          n.type === 'artifact' &&
+          (n.data as ArtifactNodeData).file.path === file.path,
+      )
+      if (existingIdx !== -1) {
+        const existing = prev[existingIdx]
+        const wasMinimized = (existing.data as ArtifactNodeData).minimized
+        return prev.map((n, i) => {
+          if (i !== existingIdx) return n
+          const d = n.data as ArtifactNodeData
+          if (wasMinimized) {
+            const restoreH = d.preMinimizeHeight || 400
+            saveArtifactMinimizedFn({
+              data: {
+                artifactId: d.artifactId,
+                minimized: false,
+              },
+            })
+            return {
+              ...n,
+              data: {
+                ...d,
+                file,
+                minimized: false,
+                preMinimizeHeight: undefined,
+              },
+              style: { ...n.style, height: restoreH },
             }
-            return { ...n, data: { ...d, file } }
-          })
-          persistCanvas()
-          return next
-        }
+          }
+          return { ...n, data: { ...d, file } }
+        })
+      }
 
-        // Find free position — avoid overlapping existing nodes
-        const artifactNodes = prev.filter((n) => n.type === 'artifact')
-        const newNode: Node = {
-          id: `artifact-${file.path}`,
-          type: 'artifact',
-          position: {
-            x: 100 + artifactNodes.length * 40,
-            y: 100 + artifactNodes.length * 40,
-          },
-          data: { file, label: file.filename } satisfies ArtifactNodeData,
-          style: { width: 480, height: 400 },
-        }
+      // New node — position based on existing artifact count
+      const artifactNodes = prev.filter((n) => n.type === 'artifact')
+      const newNode: Node = {
+        id: `artifact-${file.path}`,
+        type: 'artifact',
+        position: {
+          x: 100 + artifactNodes.length * 40,
+          y: 100 + artifactNodes.length * 40,
+        },
+        data: {
+          file,
+          label: file.filename,
+          artifactId: '', // will be populated when DB row exists
+        } satisfies ArtifactNodeData,
+        style: { width: 480, height: 400 },
+      }
 
-        const next = [...prev, newNode]
-        persistCanvas()
-        return next
-      })
-    },
-    [persistCanvas],
-  )
+      return [...prev, newNode]
+    })
+  }, [])
 
   const openArtifactBatch = useCallback(
     (files: ArtifactFile[], sectionName?: string) => {
       if (files.length === 0) return
       if (files.length === 1 || !sectionName) {
-        // Single file — just open normally
         for (const f of files) openArtifact(f)
         return
       }
 
       setNodes((prev) => {
-        // Check which files are already on canvas
         const newFiles = files.filter(
           (f) =>
             !prev.some(
@@ -244,19 +328,15 @@ export function useCanvasNodes(projectId: string, pageId: string) {
         )
 
         if (newFiles.length === 0) {
-          // All files exist — just update content
-          const next = prev.map((n) => {
+          return prev.map((n) => {
             if (n.type !== 'artifact') return n
             const match = files.find(
               (f) => (n.data as ArtifactNodeData).file.path === f.path,
             )
             return match ? { ...n, data: { ...n.data, file: match } } : n
           })
-          persistCanvas()
-          return next
         }
 
-        // Calculate section position based on existing nodes
         const allNodes = prev.filter(
           (n) => n.type !== 'artifact' || !n.parentId,
         )
@@ -274,7 +354,6 @@ export function useCanvasNodes(projectId: string, pageId: string) {
         const padding = 40
         const headerH = 50
 
-        // Create section group node
         const sectionId = `section-${crypto.randomUUID()}`
         const sectionW = newFiles.length * (nodeW + gap) - gap + padding * 2
         const sectionH = nodeH + headerH + padding * 2
@@ -291,7 +370,6 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           style: { width: sectionW, height: sectionH },
         }
 
-        // Create child artifact nodes positioned inside the section
         const childNodes: Node[] = newFiles.map((file, i) => ({
           id: `artifact-${file.path}`,
           type: 'artifact',
@@ -303,11 +381,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           data: {
             file,
             label: file.filename,
+            artifactId: '',
           } satisfies ArtifactNodeData,
           style: { width: nodeW, height: nodeH },
         }))
 
-        // Also update any existing files that got new content
         const updated = prev.map((n) => {
           if (n.type !== 'artifact') return n
           const match = files.find(
@@ -316,64 +394,71 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           return match ? { ...n, data: { ...n.data, file: match } } : n
         })
 
-        const next = [...updated, sectionNode, ...childNodes]
-        persistCanvas()
-        return next
+        return [...updated, sectionNode, ...childNodes]
       })
     },
-    [persistCanvas, openArtifact, pageId],
+    [openArtifact, pageId],
   )
 
-  const toggleMinimizeArtifact = useCallback(
-    (id: string) => {
-      setNodes((prev) => {
-        const next = prev.map((n) => {
-          if (n.id !== id) return n
-          const d = n.data as ArtifactNodeData
-          if (d.minimized) {
-            // Restore
-            const restoreH = d.preMinimizeHeight || 400
-            return {
-              ...n,
-              data: { ...d, minimized: false, preMinimizeHeight: undefined },
-              style: { ...n.style, height: restoreH },
-            }
-          } else {
-            // Minimize — save current height, collapse to title bar
-            const curH =
-              (n.style?.height as number) || (n.measured?.height ?? 400)
-            return {
-              ...n,
-              data: { ...d, minimized: true, preMinimizeHeight: curH },
-              style: { ...n.style, height: 36 },
-            }
+  const toggleMinimizeArtifact = useCallback((id: string) => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.id !== id) return n
+        const d = n.data as ArtifactNodeData
+        if (d.minimized) {
+          const restoreH = d.preMinimizeHeight || 400
+          if (d.artifactId) {
+            saveArtifactMinimizedFn({
+              data: { artifactId: d.artifactId, minimized: false },
+            })
           }
-        })
-        persistCanvas()
-        return next
-      })
-    },
-    [persistCanvas],
-  )
+          return {
+            ...n,
+            data: { ...d, minimized: false, preMinimizeHeight: undefined },
+            style: { ...n.style, height: restoreH },
+          }
+        } else {
+          const curH =
+            (n.style?.height as number) || (n.measured?.height ?? 400)
+          if (d.artifactId) {
+            saveArtifactMinimizedFn({
+              data: {
+                artifactId: d.artifactId,
+                minimized: true,
+                preMinimizeHeight: curH,
+              },
+            })
+          }
+          return {
+            ...n,
+            data: { ...d, minimized: true, preMinimizeHeight: curH },
+            style: { ...n.style, height: 36 },
+          }
+        }
+      }),
+    )
+  }, [])
 
-  const closeSection = useCallback(
-    (id: string) => {
-      setNodes((prev) => {
-        // Remove section and all its children
-        const next = prev.filter((n) => n.id !== id && n.parentId !== id)
-        persistCanvas()
-        return next
-      })
-    },
-    [persistCanvas],
-  )
+  const closeSection = useCallback((id: string) => {
+    setNodes((prev) => prev.filter((n) => n.id !== id && n.parentId !== id))
+  }, [])
 
   const setDevicePreset = useCallback(
     (nodeId: string, preset: DevicePreset | undefined) => {
-      setNodes((prev) => {
-        const next = prev.map((n) => {
+      setNodes((prev) =>
+        prev.map((n) => {
           if (n.id !== nodeId) return n
           const size = getDeviceNodeSize(preset)
+          const d = n.data as ArtifactNodeData
+          if (d.artifactId) {
+            debouncedSavePosition(
+              d.artifactId,
+              n.position.x,
+              n.position.y,
+              size.width,
+              size.height,
+            )
+          }
           return {
             ...n,
             data: { ...n.data, devicePreset: preset },
@@ -382,12 +467,10 @@ export function useCanvasNodes(projectId: string, pageId: string) {
             style: { ...n.style, width: size.width, height: size.height },
             measured: undefined,
           }
-        })
-        persistCanvas()
-        return next
-      })
+        }),
+      )
     },
-    [persistCanvas],
+    [],
   )
 
   // Listen for custom events from nodes
@@ -402,13 +485,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
     }
     const handleRenameSection = (e: Event) => {
       const { id, name } = (e as CustomEvent).detail
-      setNodes((prev) => {
-        const next = prev.map((n) =>
+      setNodes((prev) =>
+        prev.map((n) =>
           n.id === id ? { ...n, data: { ...n.data, label: name } } : n,
-        )
-        persistCanvas()
-        return next
-      })
+        ),
+      )
     }
 
     window.addEventListener('set-device-preset', handleDevicePreset)
@@ -419,13 +500,12 @@ export function useCanvasNodes(projectId: string, pageId: string) {
       window.removeEventListener('close-section', handleCloseSection)
       window.removeEventListener('rename-section', handleRenameSection)
     }
-  }, [setDevicePreset, closeSection, persistCanvas])
+  }, [setDevicePreset, closeSection])
 
   const clearCanvas = useCallback(() => {
     setNodes([])
     setEdges([])
-    clearCanvasStateFn({ data: { projectId, pageId } })
-  }, [projectId, pageId])
+  }, [])
 
   return {
     nodes,

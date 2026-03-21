@@ -261,12 +261,12 @@ export function useChat({
                 setUsage({
                   duration_ms: data.duration_ms as number,
                   total_cost_usd: data.total_cost_usd as number,
-                  input_tokens: (u?.input_tokens as number) || 0,
-                  output_tokens: (u?.output_tokens as number) || 0,
+                  input_tokens: (u?.input_tokens) || 0,
+                  output_tokens: (u?.output_tokens) || 0,
                   cache_read_tokens:
-                    (u?.cache_read_input_tokens as number) || 0,
+                    (u?.cache_read_input_tokens) || 0,
                   cache_creation_tokens:
-                    (u?.cache_creation_input_tokens as number) || 0,
+                    (u?.cache_creation_input_tokens) || 0,
                 })
               }
 

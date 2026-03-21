@@ -20,7 +20,6 @@ import { useConversation } from '../hooks/useConversation.js'
 import { appMeta } from '../consts.js'
 import type { ArtifactFile } from '../hooks/useChat.js'
 import {
-  loadState,
   loadPages,
   createPageFn,
   deletePageFn,
@@ -166,7 +165,9 @@ function CanvasApp({
       <div className="flex shrink-0 items-center gap-0.5 border-b border-border/50 bg-background px-2 py-1">
         <div className="flex items-center gap-1.5 px-2 py-1">
           <img src={appMeta.icon} alt={appMeta.name} className="size-5" />
-          <span className="text-sm font-semibold text-foreground">{appMeta.name}</span>
+          <span className="text-sm font-semibold text-foreground">
+            {appMeta.name}
+          </span>
         </div>
         <div className="mx-1 h-4 w-px bg-border/50" />
         {pages.map((p) => (
@@ -410,15 +411,6 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
     onEdgeCreated: handleEdgeCreated,
     onBatchCreated: handleBatchCreated,
   })
-
-  // Load edges from SQLite on mount (canvas nodes are loaded by useCanvasNodes)
-  useEffect(() => {
-    loadState({ data: { projectId } }).then((state) => {
-      for (const edge of state.edges) {
-        addEdge(edge.target_path, edge.source_path, edge.kind)
-      }
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for close-artifact events from nodes
   useEffect(() => {
