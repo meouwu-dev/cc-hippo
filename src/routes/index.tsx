@@ -17,6 +17,7 @@ import { useChat } from '../hooks/useChat.js'
 import { useCanvasNodes } from '../hooks/useCanvasNodes.js'
 import { useProject } from '../hooks/useProject.js'
 import { useConversation } from '../hooks/useConversation.js'
+import { appMeta } from '../consts.js'
 import type { ArtifactFile } from '../hooks/useChat.js'
 import {
   loadState,
@@ -163,6 +164,11 @@ function CanvasApp({
   return (
     <div className="canvas-app">
       <div className="flex shrink-0 items-center gap-0.5 border-b border-border/50 bg-background px-2 py-1">
+        <div className="flex items-center gap-1.5 px-2 py-1">
+          <img src={appMeta.icon} alt={appMeta.name} className="size-5" />
+          <span className="text-sm font-semibold text-foreground">{appMeta.name}</span>
+        </div>
+        <div className="mx-1 h-4 w-px bg-border/50" />
         {pages.map((p) => (
           <div
             key={p.id}

@@ -10,6 +10,7 @@ import { TooltipProvider } from '../components/ui/tooltip.js'
 
 import appCss from '../styles.css?url'
 
+import { appMeta } from '../consts.js'
 import type { QueryClient } from '@tanstack/react-query'
 
 interface MyRouterContext {
@@ -21,9 +22,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Design Preview' },
+      { title: appMeta.name },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'stylesheet', href: appCss },
+      { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    ],
   }),
   component: RootComponent,
   shellComponent: RootDocument,
