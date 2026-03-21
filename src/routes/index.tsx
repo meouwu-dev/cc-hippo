@@ -411,26 +411,11 @@ function CanvasPage({ projectId, pageId }: CanvasPageProps) {
     onBatchCreated: handleBatchCreated,
   })
 
-  // Load artifacts and edges from SQLite on mount
+  // Load edges from SQLite on mount (canvas nodes are loaded by useCanvasNodes)
   useEffect(() => {
     loadState({ data: { projectId } }).then((state) => {
-      if (state.artifacts.length > 0) {
-        // Filter artifacts for current page (or show all if no page_id set)
-        const pageArtifacts = state.artifacts.filter(
-          (art: { page_id?: string | null }) =>
-            !art.page_id || art.page_id === pageId,
-        )
-        for (const art of pageArtifacts) {
-          openArtifact({
-            path: art.path,
-            filename: art.filename,
-            version: new Date(art.updated_at).getTime(),
-            content: art.content,
-          })
-        }
-        for (const edge of state.edges) {
-          addEdge(edge.target_path, edge.source_path, edge.kind)
-        }
+      for (const edge of state.edges) {
+        addEdge(edge.target_path, edge.source_path, edge.kind)
       }
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
