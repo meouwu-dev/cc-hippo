@@ -73,8 +73,13 @@ export function useChat({
   const onBatchCreatedRef = useRef(onBatchCreated)
   onBatchCreatedRef.current = onBatchCreated
 
-  // Load from SQLite on mount
+  // Load from SQLite on mount / conversation switch
   useEffect(() => {
+    setMessages([])
+    setArtifacts([])
+    setUsage(null)
+    setStatus({ phase: 'idle' })
+    setLoaded(false)
     loadChatMessages({ data: { conversationId } }).then((msgs) => {
       if (msgs?.length) {
         setMessages(msgs as ChatMessage[])
