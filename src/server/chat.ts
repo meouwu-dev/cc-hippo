@@ -9,6 +9,7 @@ interface ChatInput {
   conversationId: string
   currentPageId?: string
   currentPageName?: string
+  references?: string[]
 }
 
 export const chatStream = createServerFn({ method: 'POST' })
@@ -99,14 +100,19 @@ export const chatStream = createServerFn({ method: 'POST' })
 
     // Prepend page context (like IDE file context)
     const pageContext = data.currentPageName
-      ? `[User is viewing page: "${data.currentPageName}"${data.currentPageId ? ` (id: ${data.currentPageId})` : ''}]\n\n`
+      ? `[User is viewing page: "${data.currentPageName}"${data.currentPageId ? ` (id: ${data.currentPageId})` : ''}]\n`
       : ''
+
+    const refContext =
+      data.references?.length
+        ? `[User selected these artifacts for reference: ${data.references.join(', ')}]\n`
+        : ''
 
     // First message: send system instruction with the message
     // Subsequent messages: use --continue to resume session, just send the new message
     const prompt = isFirstMessage
-      ? `${systemInstruction}\n\n${pageContext}${message}`
-      : `${pageContext}${message}`
+      ? `${systemInstruction}\n\n${pageContext}${refContext}\n${message}`
+      : `${pageContext}${refContext}\n${message}`
 
     // Generate MCP config for the seal server
     const dataDir = path.resolve(projectRoot, 'data')

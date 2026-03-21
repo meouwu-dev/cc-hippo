@@ -13,6 +13,7 @@ import {
   Pencil,
   Check,
   Sparkles,
+  X,
 } from 'lucide-react'
 import { Button } from './ui/button.js'
 import {
@@ -49,6 +50,8 @@ import type {
   UsageInfo,
   UserQuestion,
 } from '../hooks/useChat.js'
+import type { ArtifactNodeData } from '../hooks/useCanvasNodes.js'
+import type { Node } from '@xyflow/react'
 import type { Conversation } from '../hooks/useConversation.js'
 
 interface ChatPanelProps {
@@ -66,11 +69,14 @@ interface ChatPanelProps {
   onModelChange: (model: string) => void
   onEffortChange: (effort: string) => void
   usage: UsageInfo | null
-  onSend: (text: string, opts: { model?: string; effort?: string }) => void
+  onSend: (text: string, opts: { model?: string; effort?: string; references?: string[] }) => void
   onStop: () => void
   onArtifactClick: (file: ArtifactFile) => void
   pendingQuestions: UserQuestion[] | null
   dismissQuestions: () => void
+  selectedNodes?: Node[]
+  onClearSelection?: () => void
+  onDeselectNode?: (nodeId: string) => void
 }
 
 const MODELS = [
@@ -383,6 +389,9 @@ export default function ChatPanel({
   onArtifactClick,
   pendingQuestions,
   dismissQuestions,
+  selectedNodes = [],
+  onClearSelection,
+  onDeselectNode,
 }: ChatPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [input, setInput] = useState('')
@@ -403,9 +412,16 @@ export default function ChatPanel({
     const text = input.trim()
     if (!text || isStreaming) return
     setInput('')
+    const refs = selectedNodes
+      .map((n) => {
+        const data = n.data as ArtifactNodeData
+        return data.file?.path ?? data.label
+      })
+      .filter(Boolean)
     onSend(text, {
       model: model === 'default' ? undefined : model,
       effort: effort === 'default' ? undefined : effort,
+      references: refs.length > 0 ? refs : undefined,
     })
   }
 
@@ -651,6 +667,40 @@ export default function ChatPanel({
       </div>
 
       <div className="flex shrink-0 flex-col gap-1.5 rounded-xl border border-border/50 bg-[var(--bg-surface)] p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+        {selectedNodes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[11px] text-muted-foreground">
+              Selected:
+            </span>
+            {selectedNodes.map((n) => {
+              const data = n.data as ArtifactNodeData
+              return (
+                <span
+                  key={n.id}
+                  className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-[11px] text-primary"
+                >
+                  {data.file?.filename ?? data.label}
+                  <button
+                    className="ml-0.5 rounded-sm hover:bg-primary/20"
+                    onClick={() => onDeselectNode?.(n.id)}
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              )
+            })}
+            {selectedNodes.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-5 px-1.5 text-[10px]"
+                onClick={onClearSelection}
+              >
+                Clear all
+              </Button>
+            )}
+          </div>
+        )}
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}

@@ -81,6 +81,12 @@ body,
 .canvas-app .react-flow {
   flex: 1;
 }
+.canvas-app .react-flow .react-flow__pane {
+  cursor: default;
+}
+.canvas-app .react-flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
 
 /* React Flow overrides */
 .react-flow__attribution {

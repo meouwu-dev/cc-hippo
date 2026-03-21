@@ -141,6 +141,7 @@ export function useChat({
         effort?: string
         currentPageId?: string
         currentPageName?: string
+        references?: string[]
       } = {},
     ) => {
       const userMsg: ChatMessage = {
@@ -184,6 +185,7 @@ export function useChat({
             conversationId,
             currentPageId: opts.currentPageId,
             currentPageName: opts.currentPageName,
+            references: opts.references,
           },
           signal: controller.signal,
         })

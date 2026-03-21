@@ -6,9 +6,11 @@ import {
   Background,
   BackgroundVariant,
   MiniMap,
+  SelectionMode,
   useReactFlow,
+  useOnSelectionChange,
 } from '@xyflow/react'
-import type { NodeTypes } from '@xyflow/react'
+import type { Node as FlowNode, NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import ChatPanel from '../components/chat-panel.js'
 import ArtifactNode from '../components/artifact-node.js'
@@ -198,7 +200,7 @@ function CanvasApp({
 
   // Wrap sendMessage to inject current page context (like IDE file context)
   const sendMessage = useCallback(
-    (text: string, opts: { model?: string; effort?: string } = {}) => {
+    (text: string, opts: { model?: string; effort?: string; references?: string[] } = {}) => {
       const currentPage = pages.find((p) => p.id === currentPageId)
       return rawSendMessage(text, {
         ...opts,
@@ -636,6 +638,7 @@ function CanvasPage({
   pendingQuestions,
   dismissQuestions,
 }: CanvasPageProps) {
+  const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
   const viewportInfoRef = useRef<ViewportInfo | null>(null)
   const {
     nodes,
@@ -662,6 +665,13 @@ function CanvasPage({
       zoom: vp.zoom,
     }
   }, [getViewport])
+
+  // Track selected nodes
+  useOnSelectionChange({
+    onChange: ({ nodes: selected }) => {
+      setSelectedNodes(selected.filter((n) => n.type === 'artifact'))
+    },
+  })
 
   // Register canvas callbacks so useChat (in parent) can reach them
   useEffect(() => {
@@ -765,8 +775,17 @@ function CanvasPage({
           onArtifactClick={onArtifactClick}
           pendingQuestions={pendingQuestions}
           dismissQuestions={dismissQuestions}
+          selectedNodes={selectedNodes}
+          onClearSelection={() => setSelectedNodes([])}
+          onDeselectNode={(nodeId) =>
+            setSelectedNodes((prev) => prev.filter((n) => n.id !== nodeId))
+          }
         />
       </div>
+      <div
+        className="flex-1"
+        onContextMenu={(e) => e.preventDefault()}
+      >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -781,6 +800,9 @@ function CanvasPage({
         minZoom={0.1}
         maxZoom={3}
         proOptions={{ hideAttribution: true }}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[2]}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <div
@@ -814,6 +836,7 @@ function CanvasPage({
           />
         </div>
       </ReactFlow>
+      </div>
     </>
   )
 }
