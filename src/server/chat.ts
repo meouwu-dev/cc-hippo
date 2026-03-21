@@ -6,6 +6,7 @@ interface ChatInput {
   model?: string
   effort?: string
   projectId: string
+  conversationId: string
 }
 
 export const chatStream = createServerFn({ method: 'POST' })
@@ -45,7 +46,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       `[chat] Request: model=${model || 'default'}, effort=${effort || 'default'}, first=${isFirstMessage}, msg="${message.slice(0, 80)}..."`,
     )
 
-    const sessionId = getOrCreateSessionId(data.projectId)
+    const sessionId = getOrCreateSessionId(data.conversationId)
 
     const systemInstruction = [
       `You are a UI design system assistant working inside "Design Preview", a canvas-based design tool.`,

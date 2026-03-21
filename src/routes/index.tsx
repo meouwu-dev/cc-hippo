@@ -6,24 +6,40 @@ import {
   Background,
   BackgroundVariant,
   MiniMap,
-  useReactFlow
-  
+  useReactFlow,
 } from '@xyflow/react'
-import type {NodeTypes} from '@xyflow/react';
+import type { NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import ChatPanel from '../components/ChatPanel.js'
-import ArtifactNode from '../components/ArtifactNode.js'
-import SectionNode from '../components/SectionNode.js'
+import ChatPanel from '../components/chat-panel.js'
+import ArtifactNode from '../components/artifact-node.js'
+import SectionNode from '../components/section-node.js'
 import { useChat } from '../hooks/useChat.js'
 import { useCanvasNodes } from '../hooks/useCanvasNodes.js'
 import { useProject } from '../hooks/useProject.js'
+import { useConversation } from '../hooks/useConversation.js'
 import type { ArtifactFile } from '../hooks/useChat.js'
-import { loadState,
+import {
+  loadState,
   loadPages,
   createPageFn,
   deletePageFn,
-  renamePageFn } from '../server/state.js'
-import { Plus, X } from 'lucide-react'
+  renamePageFn,
+} from '../server/state.js'
+import { Plus, X, Check, Trash2 } from 'lucide-react'
+import { Button } from '../components/ui/button.js'
+import { Input } from '../components/ui/input.js'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select.js'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../components/ui/tooltip.js'
 
 interface PageInfo {
   id: string
@@ -84,6 +100,8 @@ function CanvasApp({
   const [currentPageId, setCurrentPageId] = useState<string>('')
   const [editingPageId, setEditingPageId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [creatingProject, setCreatingProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
 
   // Load pages on mount
   useEffect(() => {
@@ -144,16 +162,20 @@ function CanvasApp({
 
   return (
     <div className="canvas-app">
-      <div className="page-tabs">
+      <div className="flex shrink-0 items-center gap-0.5 border-b border-border/50 bg-background px-2 py-1">
         {pages.map((p) => (
           <div
             key={p.id}
-            className={`page-tab ${p.id === currentPageId ? 'active' : ''}`}
+            className={`group/tab flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-[13px] transition-colors select-none ${
+              p.id === currentPageId
+                ? 'bg-card text-foreground'
+                : 'text-muted-foreground hover:bg-muted/30'
+            }`}
             onClick={() => setCurrentPageId(p.id)}
           >
             {editingPageId === p.id ? (
-              <input
-                className="page-tab-input"
+              <Input
+                className="h-5 w-[100px] text-[13px]"
                 value={editingName}
                 onChange={(e) => setEditingName(e.target.value)}
                 onBlur={handleFinishRename}
@@ -174,36 +196,149 @@ function CanvasApp({
                 {p.name}
               </span>
             )}
-            {pages.length > 1 && p.id === currentPageId && (
-              <button
-                className="page-tab-close"
+            {pages.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
                 onClick={(e) => {
                   e.stopPropagation()
                   handleDeletePage(p.id)
                 }}
-                title="Delete page"
               >
                 <X size={10} />
-              </button>
+              </Button>
             )}
           </div>
         ))}
-        <button
-          className="page-tab-add"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="opacity-50 hover:opacity-100"
           onClick={handleCreatePage}
-          title="Add page"
         >
           <Plus size={14} />
-        </button>
+        </Button>
+
+        {/* Project selector — right side */}
+        <div className="ml-auto flex items-center gap-1">
+          {creatingProject ? (
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (newProjectName.trim()) {
+                  onCreateProject(newProjectName.trim())
+                  setNewProjectName('')
+                  setCreatingProject(false)
+                }
+              }}
+            >
+              <Input
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Project name..."
+                className="h-6 w-[120px] text-xs"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setNewProjectName('')
+                    setCreatingProject(false)
+                  }
+                }}
+              />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon-xs"
+                className="size-5"
+                disabled={!newProjectName.trim()}
+              >
+                <Check size={12} />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="size-5"
+                onClick={() => {
+                  setNewProjectName('')
+                  setCreatingProject(false)
+                }}
+              >
+                <X size={12} />
+              </Button>
+            </form>
+          ) : (
+            <>
+              <Select
+                value={projectId}
+                onValueChange={(val: string | null) => {
+                  if (val) onSwitchProject(val)
+                }}
+              >
+                <SelectTrigger size="sm" className="h-6 text-xs font-semibold">
+                  <SelectValue>
+                    {projects.find((p) => p.id === projectId)?.name ??
+                      'Project'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id} label={p.name}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-5 shrink-0"
+                      onClick={() => setCreatingProject(true)}
+                    />
+                  }
+                >
+                  <Plus size={12} />
+                </TooltipTrigger>
+                <TooltipContent>New project</TooltipContent>
+              </Tooltip>
+              {projects.length > 1 && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-5 shrink-0"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              'Delete this project and all its data?',
+                            )
+                          ) {
+                            onDeleteProject(projectId)
+                          }
+                        }}
+                      />
+                    }
+                  >
+                    <Trash2 size={11} />
+                  </TooltipTrigger>
+                  <TooltipContent>Delete project</TooltipContent>
+                </Tooltip>
+              )}
+            </>
+          )}
+        </div>
       </div>
       <CanvasPage
         key={`${projectId}-${currentPageId}`}
         projectId={projectId}
         pageId={currentPageId}
-        projects={projects}
-        onSwitchProject={onSwitchProject}
-        onCreateProject={onCreateProject}
-        onDeleteProject={onDeleteProject}
       />
     </div>
   )
@@ -212,20 +347,20 @@ function CanvasApp({
 interface CanvasPageProps {
   projectId: string
   pageId: string
-  projects: { id: string; name: string; created_at: string }[]
-  onSwitchProject: (id: string) => void
-  onCreateProject: (name: string) => void
-  onDeleteProject: (id: string) => void
 }
 
-function CanvasPage({
-  projectId,
-  pageId,
-  projects,
-  onSwitchProject,
-  onCreateProject,
-  onDeleteProject,
-}: CanvasPageProps) {
+function CanvasPage({ projectId, pageId }: CanvasPageProps) {
+  const {
+    conversations,
+    currentConversationId,
+    currentConversation,
+    loading: convLoading,
+    switchConversation,
+    createConversation,
+    deleteConversation,
+    updateSettings,
+  } = useConversation(projectId)
+
   const {
     nodes,
     edges,
@@ -235,7 +370,7 @@ function CanvasPage({
     addEdge,
     openArtifact,
     openArtifactBatch,
-    closeArtifact,
+    toggleMinimizeArtifact,
   } = useCanvasNodes(projectId, pageId)
   const { setCenter } = useReactFlow()
 
@@ -255,7 +390,6 @@ function CanvasPage({
 
   const handleBatchCreated = useCallback(
     (files: ArtifactFile[]) => {
-      // Use the first file's directory as section name, or a generic label
       const dir = files[0]?.path.split('/').slice(0, -1).join('/')
       const sectionName = dir || 'Generated Files'
       openArtifactBatch(files, sectionName)
@@ -265,6 +399,7 @@ function CanvasPage({
 
   const { messages, isStreaming, status, sendMessage, stop } = useChat({
     projectId,
+    conversationId: currentConversationId ?? '',
     onFileCreated: handleFileCreated,
     onEdgeCreated: handleEdgeCreated,
     onBatchCreated: handleBatchCreated,
@@ -298,11 +433,11 @@ function CanvasPage({
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      closeArtifact(detail.id)
+      toggleMinimizeArtifact(detail.id)
     }
-    window.addEventListener('close-artifact', handler)
-    return () => window.removeEventListener('close-artifact', handler)
-  }, [closeArtifact])
+    window.addEventListener('minimize-artifact', handler)
+    return () => window.removeEventListener('minimize-artifact', handler)
+  }, [toggleMinimizeArtifact])
 
   const nodeTypes: NodeTypes = useMemo(
     () => ({ artifact: ArtifactNode, section: SectionNode }),
@@ -328,21 +463,36 @@ function CanvasPage({
     [openArtifact, nodes, setCenter],
   )
 
+  if (convLoading || !currentConversationId || !currentConversation) {
+    return <div className="canvas-app" />
+  }
+
   return (
     <>
-      <ChatPanel
-        messages={messages}
-        isStreaming={isStreaming}
-        status={status}
-        projects={projects}
-        currentProjectId={projectId}
-        onSwitchProject={onSwitchProject}
-        onCreateProject={onCreateProject}
-        onDeleteProject={onDeleteProject}
-        onSend={sendMessage}
-        onStop={stop}
-        onArtifactClick={handleArtifactClick}
-      />
+      <div className="relative">
+        <ChatPanel
+          key={currentConversationId}
+          messages={messages}
+          isStreaming={isStreaming}
+          status={status}
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          currentModel={currentConversation.model}
+          currentEffort={currentConversation.effort}
+          onSwitchConversation={switchConversation}
+          onCreateConversation={createConversation}
+          onDeleteConversation={deleteConversation}
+          onModelChange={(model: string) =>
+            updateSettings(model, currentConversation.effort)
+          }
+          onEffortChange={(effort: string) =>
+            updateSettings(currentConversation.model, effort)
+          }
+          onSend={sendMessage}
+          onStop={stop}
+          onArtifactClick={handleArtifactClick}
+        />
+      </div>
       <ReactFlow
         nodes={nodes}
         edges={edges}

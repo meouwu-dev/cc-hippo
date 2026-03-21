@@ -13,7 +13,7 @@ import {
   saveCanvasStateFn,
   clearCanvasStateFn,
 } from '../server/state.js'
-import type { SectionNodeData } from '../components/SectionNode.js'
+import type { SectionNodeData } from '../components/section-node.js'
 
 export type DevicePreset = 'desktop' | 'tablet' | 'mobile'
 
@@ -21,18 +21,19 @@ export const DEVICE_PRESETS: Record<
   DevicePreset,
   { w: number; h: number; label: string }
 > = {
-  desktop: { w: 1440, h: 900, label: 'Desktop 1440×900' },
+  desktop: { w: 1440, h: 1024, label: 'Desktop 1440×1024' },
   tablet: { w: 768, h: 1024, label: 'Tablet 768×1024' },
-  mobile: { w: 375, h: 812, label: 'Mobile 375×812' },
+  mobile: { w: 390, h: 844, label: 'Mobile 390×844' },
 }
 
-// Scale factor for displaying device frames on canvas
-const DEVICE_SCALE = 0.4
+// No scale factor — render at 1:1 like Figma, use canvas zoom to navigate
 
 export interface ArtifactNodeData extends Record<string, unknown> {
   file: ArtifactFile
   label: string
   devicePreset?: DevicePreset
+  minimized?: boolean
+  preMinimizeHeight?: number
 }
 
 // Debounce timer for canvas state persistence
@@ -57,8 +58,8 @@ function getDeviceNodeSize(preset?: DevicePreset) {
   if (!preset) return { width: 480, height: 400 }
   const p = DEVICE_PRESETS[preset]
   return {
-    width: Math.round(p.w * DEVICE_SCALE),
-    height: Math.round(p.h * DEVICE_SCALE) + 36, // +36 for titlebar
+    width: p.w,
+    height: p.h + 36, // +36 for titlebar
   }
 }
 
@@ -176,9 +177,27 @@ export function useCanvasNodes(projectId: string, pageId: string) {
             (n.data as ArtifactNodeData).file.path === file.path,
         )
         if (existingIdx !== -1) {
-          const next = prev.map((n, i) =>
-            i === existingIdx ? { ...n, data: { ...n.data, file } } : n,
-          )
+          const existing = prev[existingIdx]
+          const wasMinimized = (existing.data as ArtifactNodeData).minimized
+          const next = prev.map((n, i) => {
+            if (i !== existingIdx) return n
+            const d = n.data as ArtifactNodeData
+            if (wasMinimized) {
+              // Restore from minimized
+              const restoreH = d.preMinimizeHeight || 400
+              return {
+                ...n,
+                data: {
+                  ...d,
+                  file,
+                  minimized: false,
+                  preMinimizeHeight: undefined,
+                },
+                style: { ...n.style, height: restoreH },
+              }
+            }
+            return { ...n, data: { ...d, file } }
+          })
           persistCanvas()
           return next
         }
@@ -305,15 +324,31 @@ export function useCanvasNodes(projectId: string, pageId: string) {
     [persistCanvas, openArtifact, pageId],
   )
 
-  const closeArtifact = useCallback(
+  const toggleMinimizeArtifact = useCallback(
     (id: string) => {
       setNodes((prev) => {
-        const next = prev.filter((n) => n.id !== id)
-        persistCanvas()
-        return next
-      })
-      setEdges((prev) => {
-        const next = prev.filter((e) => e.source !== id && e.target !== id)
+        const next = prev.map((n) => {
+          if (n.id !== id) return n
+          const d = n.data as ArtifactNodeData
+          if (d.minimized) {
+            // Restore
+            const restoreH = d.preMinimizeHeight || 400
+            return {
+              ...n,
+              data: { ...d, minimized: false, preMinimizeHeight: undefined },
+              style: { ...n.style, height: restoreH },
+            }
+          } else {
+            // Minimize — save current height, collapse to title bar
+            const curH =
+              (n.style?.height as number) || (n.measured?.height ?? 400)
+            return {
+              ...n,
+              data: { ...d, minimized: true, preMinimizeHeight: curH },
+              style: { ...n.style, height: 36 },
+            }
+          }
+        })
         persistCanvas()
         return next
       })
@@ -342,7 +377,10 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           return {
             ...n,
             data: { ...n.data, devicePreset: preset },
+            width: size.width,
+            height: size.height,
             style: { ...n.style, width: size.width, height: size.height },
+            measured: undefined,
           }
         })
         persistCanvas()
@@ -398,7 +436,7 @@ export function useCanvasNodes(projectId: string, pageId: string) {
     addEdge,
     openArtifact,
     openArtifactBatch,
-    closeArtifact,
+    toggleMinimizeArtifact,
     closeSection,
     clearCanvas,
   }

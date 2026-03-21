@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 
 import TanStackQueryProvider from '../integrations/tanstack-query/root-provider'
+import { TooltipProvider } from '../components/ui/tooltip.js'
 
 import appCss from '../styles.css?url'
 
@@ -34,12 +35,14 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en" className="dark" data-theme="dark">
       <head>
         <HeadContent />
       </head>
       <body>
-        <TanStackQueryProvider>{children}</TanStackQueryProvider>
+        <TanStackQueryProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </TanStackQueryProvider>
         <Scripts />
       </body>
     </html>

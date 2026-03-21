@@ -3,6 +3,8 @@ import {
   loadProjects,
   createProjectFn,
   deleteProjectFn,
+  getAppStateFn,
+  setAppStateFn,
 } from '../server/state.js'
 
 export interface Project {
@@ -11,7 +13,7 @@ export interface Project {
   created_at: string
 }
 
-const LS_KEY = 'seal-current-project'
+const STATE_KEY = 'active_project'
 
 export function useProject() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -19,32 +21,34 @@ export function useProject() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadProjects().then(async (list) => {
+    Promise.all([
+      loadProjects(),
+      getAppStateFn({ data: { key: STATE_KEY } }),
+    ]).then(async ([list, { value: saved }]) => {
       if (list.length === 0) {
         const created = await createProjectFn({ data: { name: 'Default' } })
         list = [created]
       }
       setProjects(list)
 
-      const saved = localStorage.getItem(LS_KEY)
       const valid = list.find((p) => p.id === saved)
       const active = valid ? valid.id : list[0].id
       setCurrentProjectId(active)
-      localStorage.setItem(LS_KEY, active)
+      await setAppStateFn({ data: { key: STATE_KEY, value: active } })
       setLoading(false)
     })
   }, [])
 
   const switchProject = useCallback((id: string) => {
     setCurrentProjectId(id)
-    localStorage.setItem(LS_KEY, id)
+    setAppStateFn({ data: { key: STATE_KEY, value: id } })
   }, [])
 
   const createProject = useCallback(async (name: string) => {
     const created = await createProjectFn({ data: { name } })
     setProjects((prev) => [...prev, created])
     setCurrentProjectId(created.id)
-    localStorage.setItem(LS_KEY, created.id)
+    await setAppStateFn({ data: { key: STATE_KEY, value: created.id } })
     return created
   }, [])
 
@@ -54,7 +58,6 @@ export function useProject() {
       setProjects((prev) => {
         const next = prev.filter((p) => p.id !== id)
         if (next.length === 0) {
-          // Will be handled by re-init
           loadProjects().then(async (list) => {
             if (list.length === 0) {
               const created = await createProjectFn({
@@ -62,7 +65,9 @@ export function useProject() {
               })
               setProjects([created])
               setCurrentProjectId(created.id)
-              localStorage.setItem(LS_KEY, created.id)
+              await setAppStateFn({
+                data: { key: STATE_KEY, value: created.id },
+              })
             }
           })
           return next
@@ -70,7 +75,7 @@ export function useProject() {
         if (id === currentProjectId) {
           const newActive = next[0].id
           setCurrentProjectId(newActive)
-          localStorage.setItem(LS_KEY, newActive)
+          setAppStateFn({ data: { key: STATE_KEY, value: newActive } })
         }
         return next
       })

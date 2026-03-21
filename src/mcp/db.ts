@@ -22,7 +22,16 @@ export function getDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT 'Chat 1',
       session_id TEXT,
+      model TEXT NOT NULL DEFAULT 'default',
+      effort TEXT NOT NULL DEFAULT 'default',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -68,9 +77,14 @@ export function getDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
       role TEXT NOT NULL,
       content TEXT NOT NULL DEFAULT '',
       thinking TEXT,
@@ -112,7 +126,6 @@ export function getDb(): Database.Database {
 export interface ProjectRow {
   id: string
   name: string
-  session_id: string | null
   created_at: string
 }
 
@@ -135,16 +148,77 @@ export function deleteProject(projectId: string): void {
   db.prepare('DELETE FROM projects WHERE id = ?').run(projectId)
 }
 
-export function getOrCreateSessionId(projectId: string): string {
+// ---- Conversations ----
+
+export interface ConversationRow {
+  id: string
+  project_id: string
+  name: string
+  session_id: string | null
+  model: string
+  effort: string
+  created_at: string
+}
+
+export function createConversation(
+  projectId: string,
+  name = 'Chat 1',
+): ConversationRow {
+  const db = getDb()
+  const id = crypto.randomUUID()
+  db.prepare(
+    'INSERT INTO conversations (id, project_id, name) VALUES (?, ?, ?)',
+  ).run(id, projectId, name)
+  return db
+    .prepare('SELECT * FROM conversations WHERE id = ?')
+    .get(id) as ConversationRow
+}
+
+export function getConversations(projectId: string): ConversationRow[] {
+  const db = getDb()
+  return db
+    .prepare(
+      'SELECT * FROM conversations WHERE project_id = ? ORDER BY created_at',
+    )
+    .all(projectId) as ConversationRow[]
+}
+
+export function deleteConversation(conversationId: string): void {
+  const db = getDb()
+  db.prepare('DELETE FROM conversations WHERE id = ?').run(conversationId)
+}
+
+export function renameConversation(conversationId: string, name: string): void {
+  const db = getDb()
+  db.prepare('UPDATE conversations SET name = ? WHERE id = ?').run(
+    name,
+    conversationId,
+  )
+}
+
+export function updateConversationSettings(
+  conversationId: string,
+  model: string,
+  effort: string,
+): void {
+  const db = getDb()
+  db.prepare('UPDATE conversations SET model = ?, effort = ? WHERE id = ?').run(
+    model,
+    effort,
+    conversationId,
+  )
+}
+
+export function getOrCreateSessionId(conversationId: string): string {
   const db = getDb()
   const row = db
-    .prepare('SELECT session_id FROM projects WHERE id = ?')
-    .get(projectId) as { session_id: string | null } | undefined
+    .prepare('SELECT session_id FROM conversations WHERE id = ?')
+    .get(conversationId) as { session_id: string | null } | undefined
   if (row?.session_id) return row.session_id
   const sessionId = crypto.randomUUID()
-  db.prepare('UPDATE projects SET session_id = ? WHERE id = ?').run(
+  db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(
     sessionId,
-    projectId,
+    conversationId,
   )
   return sessionId
 }
@@ -390,7 +464,7 @@ export function deleteSection(id: string): void {
 
 export interface ChatMessageRow {
   id: string
-  project_id: string
+  conversation_id: string
   role: string
   content: string
   thinking: string | null
@@ -398,17 +472,17 @@ export interface ChatMessageRow {
   created_at: string
 }
 
-export function getChatMessages(projectId: string): ChatMessageRow[] {
+export function getChatMessages(conversationId: string): ChatMessageRow[] {
   const db = getDb()
   return db
     .prepare(
-      'SELECT * FROM chat_messages WHERE project_id = ? ORDER BY created_at',
+      'SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY created_at',
     )
-    .all(projectId) as ChatMessageRow[]
+    .all(conversationId) as ChatMessageRow[]
 }
 
 export function saveChatMessages(
-  projectId: string,
+  conversationId: string,
   messages: {
     id: string
     role: string
@@ -419,7 +493,7 @@ export function saveChatMessages(
 ): void {
   const db = getDb()
   const upsert = db.prepare(
-    `INSERT INTO chat_messages (id, project_id, role, content, thinking, artifacts)
+    `INSERT INTO chat_messages (id, conversation_id, role, content, thinking, artifacts)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        content = excluded.content,
@@ -430,7 +504,7 @@ export function saveChatMessages(
     for (const msg of messages) {
       upsert.run(
         msg.id,
-        projectId,
+        conversationId,
         msg.role,
         msg.content,
         msg.thinking ?? null,
@@ -441,9 +515,11 @@ export function saveChatMessages(
   tx()
 }
 
-export function deleteChatMessages(projectId: string): void {
+export function deleteChatMessages(conversationId: string): void {
   const db = getDb()
-  db.prepare('DELETE FROM chat_messages WHERE project_id = ?').run(projectId)
+  db.prepare('DELETE FROM chat_messages WHERE conversation_id = ?').run(
+    conversationId,
+  )
 }
 
 // ---- Canvas State ----
@@ -482,4 +558,22 @@ export function deleteCanvasState(projectId: string, pageId: string): void {
   db.prepare(
     'DELETE FROM canvas_state WHERE project_id = ? AND page_id = ?',
   ).run(projectId, pageId)
+}
+
+// ---- App State ----
+
+export function getAppState(key: string): string | null {
+  const db = getDb()
+  const row = db
+    .prepare('SELECT value FROM app_state WHERE key = ?')
+    .get(key) as { value: string } | undefined
+  return row?.value ?? null
+}
+
+export function setAppState(key: string, value: string): void {
+  const db = getDb()
+  db.prepare(
+    `INSERT INTO app_state (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  ).run(key, value)
 }

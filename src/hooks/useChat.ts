@@ -37,6 +37,7 @@ export interface ArtifactEdge {
 
 interface UseChatOptions {
   projectId: string
+  conversationId: string
   onFileCreated?: (file: ArtifactFile) => void
   onEdgeCreated?: (edge: ArtifactEdge) => void
   onBatchCreated?: (files: ArtifactFile[]) => void
@@ -44,6 +45,7 @@ interface UseChatOptions {
 
 export function useChat({
   projectId,
+  conversationId,
   onFileCreated,
   onEdgeCreated,
   onBatchCreated,
@@ -63,7 +65,7 @@ export function useChat({
 
   // Load from SQLite on mount
   useEffect(() => {
-    loadChatMessages({ data: { projectId } }).then((msgs) => {
+    loadChatMessages({ data: { conversationId } }).then((msgs) => {
       if (msgs?.length) {
         setMessages(msgs as ChatMessage[])
         const allArtifacts: ArtifactFile[] = []
@@ -84,13 +86,13 @@ export function useChat({
       }
       setLoaded(true)
     })
-  }, [projectId])
+  }, [conversationId])
 
   const persistMessages = useCallback(
     (msgs: ChatMessage[]) => {
-      saveChatMessagesFn({ data: { projectId, messages: msgs } })
+      saveChatMessagesFn({ data: { conversationId, messages: msgs } })
     },
-    [projectId],
+    [conversationId],
   )
 
   const sendMessage = useCallback(
@@ -131,6 +133,7 @@ export function useChat({
             model: opts.model,
             effort: opts.effort,
             projectId,
+            conversationId,
           },
           signal: controller.signal,
         })
@@ -292,8 +295,8 @@ export function useChat({
   const clearHistory = useCallback(() => {
     setMessages([])
     setArtifacts([])
-    clearChatMessagesFn({ data: { projectId } })
-  }, [projectId])
+    clearChatMessagesFn({ data: { conversationId } })
+  }, [conversationId])
 
   return {
     messages,

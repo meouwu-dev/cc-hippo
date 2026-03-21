@@ -1,6 +1,9 @@
 import { memo, useState, useCallback } from 'react'
 import { NodeResizer } from '@xyflow/react'
 import { X } from 'lucide-react'
+import { Button } from './ui/button.js'
+import { Input } from './ui/input.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import type { NodeProps } from '@xyflow/react'
 
 export interface SectionNodeData extends Record<string, unknown> {
@@ -53,11 +56,11 @@ function SectionNodeInner({ data, id }: NodeProps & { data: SectionNodeData }) {
         handleStyle={{ opacity: 0, width: 10, height: 10 }}
         lineStyle={{ opacity: 0 }}
       />
-      <div className="section-node">
-        <div className="section-header">
+      <div className="size-full min-h-[300px] rounded-xl border-2 border-dashed border-primary/30 bg-primary/[0.04]">
+        <div className="flex items-center justify-between gap-2 px-4 py-2.5">
           {editing ? (
-            <input
-              className="section-name-input nodrag"
+            <Input
+              className="flex-1 text-sm font-semibold nodrag"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={handleBlur}
@@ -65,17 +68,28 @@ function SectionNodeInner({ data, id }: NodeProps & { data: SectionNodeData }) {
               autoFocus
             />
           ) : (
-            <span className="section-name" onDoubleClick={handleDoubleClick}>
+            <span
+              className="cursor-default text-sm font-semibold text-muted-foreground select-none"
+              onDoubleClick={handleDoubleClick}
+            >
               {data.label}
             </span>
           )}
-          <button
-            onClick={handleClose}
-            className="section-close-btn"
-            title="Remove section"
-          >
-            <X size={14} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleClose}
+                  className="opacity-40 hover:opacity-100"
+                />
+              }
+            >
+              <X size={14} />
+            </TooltipTrigger>
+            <TooltipContent>Remove section</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </>
