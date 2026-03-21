@@ -403,9 +403,15 @@ export default function ChatPanel({
   const setEffort = (v: string) =>
     onEffortChange(v === 'default' ? 'default' : v)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const prevMessageCountRef = useRef(messages.length)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const prevCount = prevMessageCountRef.current
+    prevMessageCountRef.current = messages.length
+    // Only auto-scroll when messages are appended, not when swapped (page change)
+    if (messages.length > prevCount) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages, status])
 
   const handleSubmit = () => {
