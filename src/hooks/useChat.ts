@@ -1,6 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { chatStream } from '../server/chat.js'
-import { idbGet, idbSet, idbDelete } from '../lib/storage.js'
+import {
+  loadChatMessages,
+  saveChatMessagesFn,
+  clearChatMessagesFn,
+} from '../server/state.js'
 
 export interface ChatMessage {
   id: string
@@ -57,28 +61,34 @@ export function useChat({
   const onBatchCreatedRef = useRef(onBatchCreated)
   onBatchCreatedRef.current = onBatchCreated
 
-  // Load from IndexedDB on mount
+  // Load from SQLite on mount
   useEffect(() => {
-    Promise.all([
-      idbGet<ChatMessage[]>(`messages-${projectId}`),
-      idbGet<ArtifactFile[]>(`artifacts-${projectId}`),
-    ]).then(([msgs, arts]) => {
-      if (msgs) setMessages(msgs)
-      if (arts) setArtifacts(arts)
+    loadChatMessages({ data: { projectId } }).then((msgs) => {
+      if (msgs?.length) {
+        setMessages(msgs as ChatMessage[])
+        const allArtifacts: ArtifactFile[] = []
+        for (const m of msgs) {
+          if (m.artifacts?.length) {
+            for (const a of m.artifacts as ArtifactFile[]) {
+              const exists = allArtifacts.some((e) => e.path === a.path)
+              if (exists) {
+                const idx = allArtifacts.findIndex((e) => e.path === a.path)
+                allArtifacts[idx] = a
+              } else {
+                allArtifacts.push(a)
+              }
+            }
+          }
+        }
+        if (allArtifacts.length) setArtifacts(allArtifacts)
+      }
       setLoaded(true)
     })
   }, [projectId])
 
   const persistMessages = useCallback(
     (msgs: ChatMessage[]) => {
-      idbSet(`messages-${projectId}`, msgs)
-    },
-    [projectId],
-  )
-
-  const persistArtifacts = useCallback(
-    (arts: ArtifactFile[]) => {
-      idbSet(`artifacts-${projectId}`, arts)
+      saveChatMessagesFn({ data: { projectId, messages: msgs } })
     },
     [projectId],
   )
@@ -207,7 +217,6 @@ export function useChat({
                   const next = exists
                     ? prev.map((a) => (a.path === file.path ? file : a))
                     : [...prev, file]
-                  persistArtifacts(next)
                   return next
                 })
                 setMessages((prev) =>
@@ -273,7 +282,7 @@ export function useChat({
         abortRef.current = null
       }
     },
-    [messages, persistMessages, persistArtifacts],
+    [messages, persistMessages],
   )
 
   const stop = useCallback(() => {
@@ -283,8 +292,7 @@ export function useChat({
   const clearHistory = useCallback(() => {
     setMessages([])
     setArtifacts([])
-    idbDelete(`messages-${projectId}`)
-    idbDelete(`artifacts-${projectId}`)
+    clearChatMessagesFn({ data: { projectId } })
   }, [projectId])
 
   return {

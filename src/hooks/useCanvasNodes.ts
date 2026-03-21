@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type {
   Node,
   NodeChange,
@@ -8,7 +8,11 @@ import type {
 } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { ArtifactFile } from './useChat.js'
-import { idbGet, idbSet, idbDelete } from '../lib/storage.js'
+import {
+  loadCanvasStateFn,
+  saveCanvasStateFn,
+  clearCanvasStateFn,
+} from '../server/state.js'
 import type { SectionNodeData } from '../components/SectionNode.js'
 
 export type DevicePreset = 'desktop' | 'tablet' | 'mobile'
@@ -31,8 +35,8 @@ export interface ArtifactNodeData extends Record<string, unknown> {
   devicePreset?: DevicePreset
 }
 
-const STORAGE_KEY = 'canvas-nodes'
-const EDGES_KEY = 'canvas-edges'
+// Debounce timer for canvas state persistence
+let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 const EDGE_COLORS: Record<string, string> = {
   references: '#888',
@@ -62,53 +66,55 @@ export function useCanvasNodes(projectId: string, pageId: string) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
 
-  const nodesKey = `${STORAGE_KEY}-${projectId}-${pageId}`
-  const edgesKey = `${EDGES_KEY}-${projectId}-${pageId}`
+  const nodesRef = useRef<Node[]>([])
+  const edgesRef = useRef<Edge[]>([])
 
-  // Load from IndexedDB on mount
+  // Keep refs in sync
+  nodesRef.current = nodes
+  edgesRef.current = edges
+
+  // Load from SQLite on mount
   useEffect(() => {
-    Promise.all([idbGet<Node[]>(nodesKey), idbGet<Edge[]>(edgesKey)]).then(
-      ([savedNodes, savedEdges]) => {
-        if (savedNodes) setNodes(savedNodes)
-        if (savedEdges) setEdges(savedEdges)
-      },
-    )
-  }, [nodesKey, edgesKey])
+    loadCanvasStateFn({ data: { projectId, pageId } }).then((state) => {
+      if (state.nodes?.length) setNodes(state.nodes as Node[])
+      if (state.edges?.length) setEdges(state.edges as Edge[])
+    })
+  }, [projectId, pageId])
 
-  const persistNodes = useCallback(
-    (next: Node[]) => {
-      idbSet(nodesKey, next)
-    },
-    [nodesKey],
-  )
-
-  const persistEdges = useCallback(
-    (next: Edge[]) => {
-      idbSet(edgesKey, next)
-    },
-    [edgesKey],
-  )
+  const persistCanvas = useCallback(() => {
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      saveCanvasStateFn({
+        data: {
+          projectId,
+          pageId,
+          nodes: nodesRef.current,
+          edges: edgesRef.current,
+        },
+      })
+    }, 500)
+  }, [projectId, pageId])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((prev) => {
         const next = applyNodeChanges(changes, prev)
-        persistNodes(next)
+        persistCanvas()
         return next
       })
     },
-    [persistNodes],
+    [persistCanvas],
   )
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       setEdges((prev) => {
         const next = applyEdgeChanges(changes, prev)
-        persistEdges(next)
+        persistCanvas()
         return next
       })
     },
-    [persistEdges],
+    [persistCanvas],
   )
 
   const onConnect = useCallback(
@@ -129,11 +135,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           return prev
         }
         const next = [...prev, edge]
-        persistEdges(next)
+        persistCanvas()
         return next
       })
     },
-    [persistEdges],
+    [persistCanvas],
   )
 
   const addEdge = useCallback(
@@ -154,11 +160,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           ...edgeStyle,
         }
         const next = [...prev, edge]
-        persistEdges(next)
+        persistCanvas()
         return next
       })
     },
-    [persistEdges],
+    [persistCanvas],
   )
 
   const openArtifact = useCallback(
@@ -173,7 +179,7 @@ export function useCanvasNodes(projectId: string, pageId: string) {
           const next = prev.map((n, i) =>
             i === existingIdx ? { ...n, data: { ...n.data, file } } : n,
           )
-          persistNodes(next)
+          persistCanvas()
           return next
         }
 
@@ -191,11 +197,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
         }
 
         const next = [...prev, newNode]
-        persistNodes(next)
+        persistCanvas()
         return next
       })
     },
-    [persistNodes],
+    [persistCanvas],
   )
 
   const openArtifactBatch = useCallback(
@@ -227,7 +233,7 @@ export function useCanvasNodes(projectId: string, pageId: string) {
             )
             return match ? { ...n, data: { ...n.data, file: match } } : n
           })
-          persistNodes(next)
+          persistCanvas()
           return next
         }
 
@@ -292,27 +298,27 @@ export function useCanvasNodes(projectId: string, pageId: string) {
         })
 
         const next = [...updated, sectionNode, ...childNodes]
-        persistNodes(next)
+        persistCanvas()
         return next
       })
     },
-    [persistNodes, openArtifact, pageId],
+    [persistCanvas, openArtifact, pageId],
   )
 
   const closeArtifact = useCallback(
     (id: string) => {
       setNodes((prev) => {
         const next = prev.filter((n) => n.id !== id)
-        persistNodes(next)
+        persistCanvas()
         return next
       })
       setEdges((prev) => {
         const next = prev.filter((e) => e.source !== id && e.target !== id)
-        persistEdges(next)
+        persistCanvas()
         return next
       })
     },
-    [persistNodes, persistEdges],
+    [persistCanvas],
   )
 
   const closeSection = useCallback(
@@ -320,11 +326,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
       setNodes((prev) => {
         // Remove section and all its children
         const next = prev.filter((n) => n.id !== id && n.parentId !== id)
-        persistNodes(next)
+        persistCanvas()
         return next
       })
     },
-    [persistNodes],
+    [persistCanvas],
   )
 
   const setDevicePreset = useCallback(
@@ -339,11 +345,11 @@ export function useCanvasNodes(projectId: string, pageId: string) {
             style: { ...n.style, width: size.width, height: size.height },
           }
         })
-        persistNodes(next)
+        persistCanvas()
         return next
       })
     },
-    [persistNodes],
+    [persistCanvas],
   )
 
   // Listen for custom events from nodes
@@ -362,7 +368,7 @@ export function useCanvasNodes(projectId: string, pageId: string) {
         const next = prev.map((n) =>
           n.id === id ? { ...n, data: { ...n.data, label: name } } : n,
         )
-        persistNodes(next)
+        persistCanvas()
         return next
       })
     }
@@ -375,14 +381,13 @@ export function useCanvasNodes(projectId: string, pageId: string) {
       window.removeEventListener('close-section', handleCloseSection)
       window.removeEventListener('rename-section', handleRenameSection)
     }
-  }, [setDevicePreset, closeSection, persistNodes])
+  }, [setDevicePreset, closeSection, persistCanvas])
 
   const clearCanvas = useCallback(() => {
     setNodes([])
     setEdges([])
-    idbDelete(nodesKey)
-    idbDelete(edgesKey)
-  }, [nodesKey, edgesKey])
+    clearCanvasStateFn({ data: { projectId, pageId } })
+  }, [projectId, pageId])
 
   return {
     nodes,

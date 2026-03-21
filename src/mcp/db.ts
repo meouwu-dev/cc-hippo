@@ -67,6 +67,26 @@ export function getDb(): Database.Database {
       height REAL NOT NULL DEFAULT 600,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      thinking TEXT,
+      artifacts TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS canvas_state (
+      project_id TEXT NOT NULL,
+      page_id TEXT NOT NULL,
+      nodes TEXT NOT NULL DEFAULT '[]',
+      edges TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (project_id, page_id),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `)
 
   // Add columns to artifacts if they don't exist yet
@@ -364,4 +384,102 @@ export function deleteSection(id: string): void {
     id,
   )
   db.prepare('DELETE FROM sections WHERE id = ?').run(id)
+}
+
+// ---- Chat Messages ----
+
+export interface ChatMessageRow {
+  id: string
+  project_id: string
+  role: string
+  content: string
+  thinking: string | null
+  artifacts: string | null
+  created_at: string
+}
+
+export function getChatMessages(projectId: string): ChatMessageRow[] {
+  const db = getDb()
+  return db
+    .prepare(
+      'SELECT * FROM chat_messages WHERE project_id = ? ORDER BY created_at',
+    )
+    .all(projectId) as ChatMessageRow[]
+}
+
+export function saveChatMessages(
+  projectId: string,
+  messages: {
+    id: string
+    role: string
+    content: string
+    thinking?: string
+    artifacts?: unknown[]
+  }[],
+): void {
+  const db = getDb()
+  const upsert = db.prepare(
+    `INSERT INTO chat_messages (id, project_id, role, content, thinking, artifacts)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       content = excluded.content,
+       thinking = excluded.thinking,
+       artifacts = excluded.artifacts`,
+  )
+  const tx = db.transaction(() => {
+    for (const msg of messages) {
+      upsert.run(
+        msg.id,
+        projectId,
+        msg.role,
+        msg.content,
+        msg.thinking ?? null,
+        JSON.stringify(msg.artifacts ?? []),
+      )
+    }
+  })
+  tx()
+}
+
+export function deleteChatMessages(projectId: string): void {
+  const db = getDb()
+  db.prepare('DELETE FROM chat_messages WHERE project_id = ?').run(projectId)
+}
+
+// ---- Canvas State ----
+
+export function getCanvasState(
+  projectId: string,
+  pageId: string,
+): { nodes: string; edges: string } | undefined {
+  const db = getDb()
+  return db
+    .prepare(
+      'SELECT nodes, edges FROM canvas_state WHERE project_id = ? AND page_id = ?',
+    )
+    .get(projectId, pageId) as { nodes: string; edges: string } | undefined
+}
+
+export function saveCanvasState(
+  projectId: string,
+  pageId: string,
+  nodes: unknown[],
+  edges: unknown[],
+): void {
+  const db = getDb()
+  db.prepare(
+    `INSERT INTO canvas_state (project_id, page_id, nodes, edges)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(project_id, page_id) DO UPDATE SET
+       nodes = excluded.nodes,
+       edges = excluded.edges,
+       updated_at = datetime('now')`,
+  ).run(projectId, pageId, JSON.stringify(nodes), JSON.stringify(edges))
+}
+
+export function deleteCanvasState(projectId: string, pageId: string): void {
+  const db = getDb()
+  db.prepare(
+    'DELETE FROM canvas_state WHERE project_id = ? AND page_id = ?',
+  ).run(projectId, pageId)
 }
