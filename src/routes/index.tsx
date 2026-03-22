@@ -208,6 +208,28 @@ function CanvasApp({
   const onMoveArtifact = useCallback((path: string, x: number, y: number) => {
     moveArtifactRef.current?.(path, x, y)
   }, [])
+  const pendingArtifactRef = useRef<
+    | ((info: {
+        path: string
+        filename: string
+        devicePreset?: string
+        x: number
+        y: number
+      }) => void)
+    | undefined
+  >(undefined)
+  const onPendingArtifact = useCallback(
+    (info: {
+      path: string
+      filename: string
+      devicePreset?: string
+      x: number
+      y: number
+    }) => {
+      pendingArtifactRef.current?.(info)
+    },
+    [],
+  )
   const onSetViewport = useCallback(
     (data: {
       mode: string
@@ -221,24 +243,30 @@ function CanvasApp({
     },
     [],
   )
+  const reloadPages = useCallback(() => {
+    loadPages({ data: { projectId } }).then((loaded) => {
+      setPages((prev) => {
+        const prevIds = new Set(prev.map((p) => p.id))
+        const hasNew = (loaded as PageInfo[]).some((p) => !prevIds.has(p.id))
+        if (hasNew) return loaded as PageInfo[]
+        const namesChanged = (loaded as PageInfo[]).some(
+          (p) => prev.find((pp) => pp.id === p.id)?.name !== p.name,
+        )
+        return namesChanged ? (loaded as PageInfo[]) : prev
+      })
+    })
+  }, [projectId])
+
+  const onCreatePage = useCallback(() => {
+    reloadPages()
+  }, [reloadPages])
+
   const onSwitchPage = useCallback(
     (pageId: string) => {
       setCurrentPageId(pageId)
-      // Also reload pages in case AI created it just now
-      loadPages({ data: { projectId } }).then((loaded) => {
-        setPages((prev) => {
-          const prevIds = new Set(prev.map((p) => p.id))
-          const hasNew = (loaded as PageInfo[]).some((p) => !prevIds.has(p.id))
-          if (hasNew) return loaded as PageInfo[]
-          // Also update names (AI may have renamed)
-          const namesChanged = (loaded as PageInfo[]).some(
-            (p) => prev.find((pp) => pp.id === p.id)?.name !== p.name,
-          )
-          return namesChanged ? (loaded as PageInfo[]) : prev
-        })
-      })
+      reloadPages()
     },
-    [projectId],
+    [reloadPages],
   )
 
   const onRenamePage = useCallback((pageId: string, name: string) => {
@@ -265,10 +293,12 @@ function CanvasApp({
     onEdgeUpdated,
     onBatchCreated,
     onStartNewRow,
+    onCreatePage,
     onSwitchPage,
     onRenamePage,
     onDevicePreset,
     onMoveArtifact,
+    onPendingArtifact,
     onSetViewport,
   })
 
@@ -644,6 +674,7 @@ function CanvasApp({
           startNewRowRef={startNewRowRef}
           devicePresetRef={devicePresetRef}
           moveArtifactRef={moveArtifactRef}
+          pendingArtifactRef={pendingArtifactRef}
           setViewportRef={setViewportRef}
           messages={messages}
           isStreaming={isStreaming}
@@ -706,6 +737,16 @@ interface CanvasPageProps {
   moveArtifactRef: React.RefObject<
     ((path: string, x: number, y: number) => void) | undefined
   >
+  pendingArtifactRef: React.RefObject<
+    | ((info: {
+        path: string
+        filename: string
+        devicePreset?: string
+        x: number
+        y: number
+      }) => void)
+    | undefined
+  >
   setViewportRef: React.RefObject<
     | ((data: {
         mode: string
@@ -752,6 +793,7 @@ function CanvasPage({
   startNewRowRef,
   devicePresetRef,
   moveArtifactRef,
+  pendingArtifactRef,
   setViewportRef,
   messages,
   isStreaming,
@@ -787,6 +829,7 @@ function CanvasPage({
     updateEdge,
     openArtifact,
     openArtifactBatch,
+    spawnPendingNode,
     startNewRow,
     toggleMinimizeArtifact,
     markNodeStreaming,
@@ -873,6 +916,11 @@ function CanvasPage({
     devicePresetRef.current = (path, preset) =>
       setDevicePresetByPath(path, preset as DevicePreset)
     moveArtifactRef.current = (path, x, y) => moveArtifactByPath(path, x, y)
+    pendingArtifactRef.current = (info) =>
+      spawnPendingNode({
+        ...info,
+        devicePreset: info.devicePreset as DevicePreset | undefined,
+      })
     setViewportRef.current = (data) => {
       const idleTime = Date.now() - lastUserInteractionRef.current
       const isIdle = idleTime >= IDLE_THRESHOLD || canvasEmptyAtStreamStartRef.current
@@ -931,6 +979,7 @@ function CanvasPage({
       startNewRowRef.current = undefined
       devicePresetRef.current = undefined
       moveArtifactRef.current = undefined
+      pendingArtifactRef.current = undefined
       setViewportRef.current = undefined
     }
   }, [
@@ -942,11 +991,13 @@ function CanvasPage({
     startNewRowRef,
     devicePresetRef,
     moveArtifactRef,
+    pendingArtifactRef,
     openArtifact,
     addEdge,
     removeEdge,
     updateEdge,
     openArtifactBatch,
+    spawnPendingNode,
     startNewRow,
     markNodeStreaming,
     setDevicePresetByPath,

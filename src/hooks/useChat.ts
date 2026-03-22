@@ -61,10 +61,18 @@ interface UseChatOptions {
   onEdgeUpdated?: (source: string, target: string, label: string) => void
   onBatchCreated?: (files: ArtifactFile[]) => void
   onStartNewRow?: () => void
+  onCreatePage?: (name: string) => void
   onSwitchPage?: (pageId: string) => void
   onRenamePage?: (pageId: string, name: string) => void
   onDevicePreset?: (path: string, preset: string) => void
   onMoveArtifact?: (path: string, x: number, y: number) => void
+  onPendingArtifact?: (info: {
+    path: string
+    filename: string
+    devicePreset?: string
+    x: number
+    y: number
+  }) => void
   onSetViewport?: (data: {
     mode: string
     paths?: string[]
@@ -84,10 +92,12 @@ export function useChat({
   onEdgeUpdated,
   onBatchCreated,
   onStartNewRow,
+  onCreatePage,
   onSwitchPage,
   onRenamePage,
   onDevicePreset,
   onMoveArtifact,
+  onPendingArtifact,
   onSetViewport,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -112,6 +122,8 @@ export function useChat({
   onBatchCreatedRef.current = onBatchCreated
   const onStartNewRowRef = useRef(onStartNewRow)
   onStartNewRowRef.current = onStartNewRow
+  const onCreatePageRef = useRef(onCreatePage)
+  onCreatePageRef.current = onCreatePage
   const onSwitchPageRef = useRef(onSwitchPage)
   onSwitchPageRef.current = onSwitchPage
   const onRenamePageRef = useRef(onRenamePage)
@@ -120,6 +132,8 @@ export function useChat({
   onDevicePresetRef.current = onDevicePreset
   const onMoveArtifactRef = useRef(onMoveArtifact)
   onMoveArtifactRef.current = onMoveArtifact
+  const onPendingArtifactRef = useRef(onPendingArtifact)
+  onPendingArtifactRef.current = onPendingArtifact
   const onSetViewportRef = useRef(onSetViewport)
   onSetViewportRef.current = onSetViewport
 
@@ -375,6 +389,10 @@ export function useChat({
                 )
               }
 
+              if (data.type === 'createPage') {
+                onCreatePageRef.current?.(data.name as string)
+              }
+
               if (data.type === 'switchPage') {
                 onSwitchPageRef.current?.(data.pageId as string)
               }
@@ -384,6 +402,16 @@ export function useChat({
                   data.pageId as string,
                   data.name as string,
                 )
+              }
+
+              if (data.type === 'pendingArtifact') {
+                onPendingArtifactRef.current?.({
+                  path: data.path as string,
+                  filename: data.filename as string,
+                  devicePreset: data.devicePreset as string | undefined,
+                  x: data.x as number,
+                  y: data.y as number,
+                })
               }
 
               if (data.type === 'devicePreset') {

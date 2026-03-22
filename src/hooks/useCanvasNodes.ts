@@ -38,6 +38,7 @@ export interface ArtifactNodeData extends Record<string, unknown> {
   minimized?: boolean
   preMinimizeHeight?: number
   streaming?: boolean
+  pending?: boolean
 }
 
 function getEdgeStyle() {
@@ -422,11 +423,12 @@ export function useCanvasNodes(
                 file,
                 minimized: false,
                 preMinimizeHeight: undefined,
+                pending: false,
               },
               style: { ...n.style, height: restoreH },
             }
           }
-          return { ...n, data: { ...d, file } }
+          return { ...n, data: { ...d, file, pending: false } }
         })
       }
 
@@ -613,6 +615,49 @@ export function useCanvasNodes(
       })
     },
     [openArtifact, pageId],
+  )
+
+  // Spawn a ghost/placeholder node when saveArtifact is called (before Write)
+  const spawnPendingNode = useCallback(
+    (info: {
+      path: string
+      filename: string
+      devicePreset?: DevicePreset
+      x: number
+      y: number
+    }) => {
+      setNodes((prev) => {
+        // Don't spawn if node already exists
+        const nodeId = `artifact-${info.path}`
+        if (prev.some((n) => n.id === nodeId)) return prev
+
+        const nodeSize = info.devicePreset
+          ? getDeviceNodeSize(info.devicePreset)
+          : { width: NODE_W, height: NODE_H }
+
+        const newNode: Node = {
+          id: nodeId,
+          type: 'artifact',
+          position: { x: info.x, y: info.y },
+          data: {
+            file: {
+              path: info.path,
+              filename: info.filename,
+              content: '',
+              version: 0,
+            },
+            label: info.filename,
+            artifactId: '',
+            devicePreset: info.devicePreset,
+            pending: true,
+          } satisfies ArtifactNodeData,
+          style: { width: nodeSize.width, height: nodeSize.height },
+        }
+
+        return [...prev, newNode]
+      })
+    },
+    [],
   )
 
   const toggleMinimizeArtifact = useCallback((id: string) => {
@@ -812,6 +857,7 @@ export function useCanvasNodes(
     updateEdge,
     openArtifact,
     openArtifactBatch,
+    spawnPendingNode,
     startNewRow,
     toggleMinimizeArtifact,
     closeSection,

@@ -31,7 +31,7 @@ function ArtifactNodeInner({
   data,
   id,
 }: NodeProps & { data: ArtifactNodeData }) {
-  const { file, devicePreset, minimized, streaming } = data
+  const { file, devicePreset, minimized, streaming, pending } = data
   const ext = (file.path || file.filename).split('.').pop()?.toLowerCase() || ''
 
   const handleSetDevice = useCallback(
@@ -88,11 +88,11 @@ function ArtifactNodeInner({
             >
               {file.filename}
             </span>
-            {streaming && (
+            {(streaming || pending) && (
               <div className="flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5">
                 <div className="size-1.5 animate-pulse rounded-full bg-primary" />
                 <span className="text-[10px] font-medium text-primary">
-                  Writing
+                  {pending ? 'Preparing' : 'Writing'}
                 </span>
               </div>
             )}
@@ -225,7 +225,15 @@ function ArtifactNodeInner({
           </div>
         </div>
         {/* Body */}
-        {!minimized && (
+        {!minimized && pending && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+            <div className="size-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+            <span className="text-xs text-muted-foreground">
+              Waiting for content...
+            </span>
+          </div>
+        )}
+        {!minimized && !pending && (
           <div className="flex-1 cursor-default overflow-auto select-text nowheel nodrag nopan">
             {ext === 'html' ? (
               <iframe

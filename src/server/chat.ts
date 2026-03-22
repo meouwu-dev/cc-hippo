@@ -370,8 +370,18 @@ export const chatStream = createServerFn({ method: 'POST' })
                 .questions
               send({ type: 'askUser', questions })
             }
-            // Intercept saveArtifact MCP tool to forward devicePreset and position
+            // Intercept saveArtifact MCP tool to spawn a pending ghost node
             if (block.name === 'mcp__seal__saveArtifact' && input) {
+              if (input.x !== undefined && input.y !== undefined) {
+                send({
+                  type: 'pendingArtifact',
+                  path: input.path,
+                  filename: input.path.split('/').pop() || input.path,
+                  devicePreset: input.devicePreset,
+                  x: Number(input.x),
+                  y: Number(input.y),
+                })
+              }
               if (input.devicePreset) {
                 send({
                   type: 'devicePreset',
@@ -387,6 +397,15 @@ export const chatStream = createServerFn({ method: 'POST' })
                   y: Number(input.y),
                 })
               }
+            }
+            // Intercept linkArtifacts MCP tool to emit edge creation in real-time
+            if (block.name === 'mcp__seal__linkArtifacts' && input) {
+              send({
+                type: 'edge',
+                source: input.source_path,
+                target: input.target_path,
+                kind: input.label || '',
+              })
             }
             // Intercept unlinkArtifacts MCP tool to emit edge removal
             if (block.name === 'mcp__seal__unlinkArtifacts' && input) {
@@ -404,6 +423,10 @@ export const chatStream = createServerFn({ method: 'POST' })
                 target: input.target_path,
                 label: input.label,
               })
+            }
+            // Intercept createPage MCP tool to emit page creation event
+            if (block.name === 'mcp__seal__createPage' && input?.name) {
+              send({ type: 'createPage', name: input.name })
             }
             // Intercept switchPage MCP tool to emit page navigation event
             if (block.name === 'mcp__seal__switchPage' && input?.pageId) {
