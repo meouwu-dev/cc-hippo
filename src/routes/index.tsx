@@ -810,8 +810,16 @@ function CanvasPage({
         if (node) {
           const w = (node.style?.width as number) || 480
           const h = (node.style?.height as number) || 400
+          const padding = 80
+          const vw = window.innerWidth
+          const vh = window.innerHeight
+          const zoom = Math.min(
+            1,
+            vw / (w + padding * 2),
+            vh / (h + padding * 2),
+          )
           setCenter(node.position.x + w / 2, node.position.y + h / 2, {
-            zoom: 1,
+            zoom,
             duration: 300,
           })
         }
