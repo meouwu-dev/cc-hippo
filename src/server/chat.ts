@@ -91,10 +91,12 @@ export const chatStream = createServerFn({ method: 'POST' })
       ``,
       `ASKING THE USER QUESTIONS:`,
       `When you need the user to choose between alternatives, call the askUser MCP tool.`,
+      `NEVER use the AskUserQuestion tool — it does not work in this app. ONLY use mcp__seal__askUser.`,
       `It supports multiple questions at once — each with predefined options and an optional custom text input.`,
       `The app renders these as interactive forms with clickable buttons. The user's answers are returned as Q&A pairs.`,
       `NEVER present options as markdown numbered/bulleted lists — always use askUser.`,
       `Keep option text short (under 50 chars). You can ask multiple questions in a single call.`,
+      `IMPORTANT: When using askUser, ALWAYS output a short one-liner text message before the tool call explaining what you need (e.g. "Let me ask a few questions to understand your vision."). The text MUST come before the askUser call, not after. Never call askUser with only a thinking block and no visible text.`,
     ].join('\n')
 
     // Prepend page context (like IDE file context)
