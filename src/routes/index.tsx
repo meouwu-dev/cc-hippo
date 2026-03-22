@@ -186,6 +186,15 @@ function CanvasApp({
     [projectId],
   )
 
+  const onRenamePage = useCallback(
+    (pageId: string, name: string) => {
+      setPages((prev) =>
+        prev.map((p) => (p.id === pageId ? { ...p, name } : p)),
+      )
+    },
+    [],
+  )
+
   // useChat lives here — survives page switches
   const {
     messages,
@@ -205,6 +214,7 @@ function CanvasApp({
     onBatchCreated,
     onStartNewRow,
     onSwitchPage,
+    onRenamePage,
     onDevicePreset,
   })
 

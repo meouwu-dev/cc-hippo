@@ -60,6 +60,7 @@ interface UseChatOptions {
   onBatchCreated?: (files: ArtifactFile[]) => void
   onStartNewRow?: () => void
   onSwitchPage?: (pageId: string) => void
+  onRenamePage?: (pageId: string, name: string) => void
   onDevicePreset?: (path: string, preset: string) => void
 }
 
@@ -71,6 +72,7 @@ export function useChat({
   onBatchCreated,
   onStartNewRow,
   onSwitchPage,
+  onRenamePage,
   onDevicePreset,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -93,6 +95,8 @@ export function useChat({
   onStartNewRowRef.current = onStartNewRow
   const onSwitchPageRef = useRef(onSwitchPage)
   onSwitchPageRef.current = onSwitchPage
+  const onRenamePageRef = useRef(onRenamePage)
+  onRenamePageRef.current = onRenamePage
   const onDevicePresetRef = useRef(onDevicePreset)
   onDevicePresetRef.current = onDevicePreset
 
@@ -342,6 +346,13 @@ export function useChat({
 
               if (data.type === 'switchPage') {
                 onSwitchPageRef.current?.(data.pageId as string)
+              }
+
+              if (data.type === 'renamePage') {
+                onRenamePageRef.current?.(
+                  data.pageId as string,
+                  data.name as string,
+                )
               }
 
               if (data.type === 'devicePreset') {

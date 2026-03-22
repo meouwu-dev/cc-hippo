@@ -296,6 +296,14 @@ export const chatStream = createServerFn({ method: 'POST' })
             if (block.name === 'mcp__seal__switchPage' && input?.pageId) {
               send({ type: 'switchPage', pageId: input.pageId })
             }
+            // Intercept renamePage MCP tool to emit page rename event
+            if (block.name === 'mcp__seal__renamePage' && input?.pageId) {
+              send({
+                type: 'renamePage',
+                pageId: input.pageId,
+                name: input.name,
+              })
+            }
             send({ type: 'status', event: formatToolStatus(block) })
           }
         }
