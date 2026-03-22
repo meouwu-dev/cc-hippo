@@ -613,6 +613,7 @@ export function saveChatMessages(
     id: string
     role: string
     content: string
+    timestamp?: number
     thinking?: string[]
     artifacts?: unknown[]
     questions?: unknown[]
@@ -620,8 +621,8 @@ export function saveChatMessages(
 ): void {
   const db = getDb()
   const upsert = db.prepare(
-    `INSERT INTO chat_messages (id, conversation_id, role, content, thinking, artifacts, questions)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO chat_messages (id, conversation_id, role, content, thinking, artifacts, questions, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        content = excluded.content,
        thinking = excluded.thinking,
@@ -638,6 +639,9 @@ export function saveChatMessages(
         msg.thinking?.length ? JSON.stringify(msg.thinking) : null,
         JSON.stringify(msg.artifacts ?? []),
         msg.questions ? JSON.stringify(msg.questions) : null,
+        msg.timestamp
+          ? new Date(msg.timestamp).toISOString()
+          : new Date().toISOString(),
       )
     }
   })

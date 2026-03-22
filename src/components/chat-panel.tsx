@@ -628,7 +628,7 @@ export default function ChatPanel({
                       <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-border px-3 py-2 text-[13px] leading-relaxed text-foreground">
                         <Markdown>{msg.content}</Markdown>
                       </div>
-                      <div className="flex items-center gap-0.5">
+                      <div className="mt-1 flex items-center gap-0.5">
                         {msg.timestamp && (
                           <span className="text-[10px] leading-none text-muted-foreground">
                             {new Date(msg.timestamp).toLocaleTimeString([], {

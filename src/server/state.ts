@@ -269,6 +269,7 @@ export const loadChatMessages = createServerFn({ method: 'POST' })
             }
           })()
         : undefined,
+      timestamp: r.created_at ? new Date(r.created_at).getTime() : undefined,
       artifacts: r.artifacts ? JSON.parse(r.artifacts) : [],
       questions: r.questions ? JSON.parse(r.questions) : undefined,
     }))
@@ -282,6 +283,7 @@ export const saveChatMessagesFn = createServerFn({ method: 'POST' })
         id: string
         role: string
         content: string
+        timestamp?: number
         thinking?: string[]
         artifacts?: unknown[]
         questions?: unknown[]
