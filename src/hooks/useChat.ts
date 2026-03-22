@@ -60,6 +60,7 @@ interface UseChatOptions {
   onBatchCreated?: (files: ArtifactFile[]) => void
   onStartNewRow?: () => void
   onSwitchPage?: (pageId: string) => void
+  onDevicePreset?: (path: string, preset: string) => void
 }
 
 export function useChat({
@@ -70,6 +71,7 @@ export function useChat({
   onBatchCreated,
   onStartNewRow,
   onSwitchPage,
+  onDevicePreset,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -91,6 +93,8 @@ export function useChat({
   onStartNewRowRef.current = onStartNewRow
   const onSwitchPageRef = useRef(onSwitchPage)
   onSwitchPageRef.current = onSwitchPage
+  const onDevicePresetRef = useRef(onDevicePreset)
+  onDevicePresetRef.current = onDevicePreset
 
   // Load from SQLite on mount / conversation switch
   useEffect(() => {
@@ -313,6 +317,13 @@ export function useChat({
 
               if (data.type === 'switchPage') {
                 onSwitchPageRef.current?.(data.pageId as string)
+              }
+
+              if (data.type === 'devicePreset') {
+                onDevicePresetRef.current?.(
+                  data.path as string,
+                  data.preset as string,
+                )
               }
 
               if (data.type === 'usage') {

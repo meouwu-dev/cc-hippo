@@ -17,7 +17,7 @@ import ArtifactNode from '../components/artifact-node.js'
 import SectionNode from '../components/section-node.js'
 import { useChat } from '../hooks/useChat.js'
 import { useCanvasNodes  } from '../hooks/useCanvasNodes.js'
-import type {ViewportInfo} from '../hooks/useCanvasNodes.js';
+import type {ViewportInfo, DevicePreset} from '../hooks/useCanvasNodes.js';
 import { useProject } from '../hooks/useProject.js'
 import { useConversation } from '../hooks/useConversation.js'
 import { appMeta } from '../consts.js'
@@ -143,6 +143,9 @@ function CanvasApp({
     undefined,
   )
   const startNewRowRef = useRef<(() => void) | undefined>(undefined)
+  const devicePresetRef = useRef<
+    ((path: string, preset: string) => void) | undefined
+  >(undefined)
 
   // Stable wrappers that delegate to the current page's callbacks
   const onFileCreated = useCallback((file: ArtifactFile) => {
@@ -159,6 +162,9 @@ function CanvasApp({
   }, [])
   const onStartNewRow = useCallback(() => {
     startNewRowRef.current?.()
+  }, [])
+  const onDevicePreset = useCallback((path: string, preset: string) => {
+    devicePresetRef.current?.(path, preset)
   }, [])
   const onSwitchPage = useCallback(
     (pageId: string) => {
@@ -199,6 +205,7 @@ function CanvasApp({
     onBatchCreated,
     onStartNewRow,
     onSwitchPage,
+    onDevicePreset,
   })
 
   // Wrap sendMessage to inject current page context (like IDE file context)
@@ -557,6 +564,7 @@ function CanvasApp({
           edgeCreatedRef={edgeCreatedRef}
           batchCreatedRef={batchCreatedRef}
           startNewRowRef={startNewRowRef}
+          devicePresetRef={devicePresetRef}
           messages={messages}
           isStreaming={isStreaming}
           status={status}
@@ -606,6 +614,9 @@ interface CanvasPageProps {
     ((files: ArtifactFile[]) => void) | undefined
   >
   startNewRowRef: React.RefObject<(() => void) | undefined>
+  devicePresetRef: React.RefObject<
+    ((path: string, preset: string) => void) | undefined
+  >
   messages: ReturnType<typeof useChat>['messages']
   isStreaming: boolean
   status: ReturnType<typeof useChat>['status']
@@ -637,6 +648,7 @@ function CanvasPage({
   edgeCreatedRef,
   batchCreatedRef,
   startNewRowRef,
+  devicePresetRef,
   messages,
   isStreaming,
   status,
@@ -671,6 +683,7 @@ function CanvasPage({
     openArtifactBatch,
     startNewRow,
     toggleMinimizeArtifact,
+    setDevicePresetByPath,
     savedViewport,
   } = useCanvasNodes(projectId, pageId, viewportInfoRef)
   const { setCenter, getViewport, setViewport } = useReactFlow()
@@ -727,21 +740,26 @@ function CanvasPage({
       openArtifactBatch(files, sectionName)
     }
     startNewRowRef.current = () => startNewRow()
+    devicePresetRef.current = (path, preset) =>
+      setDevicePresetByPath(path, preset as DevicePreset)
     return () => {
       fileCreatedRef.current = undefined
       edgeCreatedRef.current = undefined
       batchCreatedRef.current = undefined
       startNewRowRef.current = undefined
+      devicePresetRef.current = undefined
     }
   }, [
     fileCreatedRef,
     edgeCreatedRef,
     batchCreatedRef,
     startNewRowRef,
+    devicePresetRef,
     openArtifact,
     addEdge,
     openArtifactBatch,
     startNewRow,
+    setDevicePresetByPath,
   ])
 
   // Listen for close-artifact events from nodes

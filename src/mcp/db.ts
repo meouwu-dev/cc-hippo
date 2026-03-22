@@ -354,6 +354,16 @@ export function updateArtifactPositionByPath(
   ).run(x, y, w, h, projectId, path)
 }
 
+export function updateArtifactDevicePreset(
+  id: string,
+  devicePreset: string | null,
+): void {
+  const db = getDb()
+  db.prepare(
+    "UPDATE artifacts SET device_preset = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(devicePreset, id)
+}
+
 export function updateArtifactMinimized(
   id: string,
   minimized: boolean,

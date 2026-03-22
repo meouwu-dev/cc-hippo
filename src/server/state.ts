@@ -120,6 +120,16 @@ export const saveArtifactMinimizedFn = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
+export const saveArtifactDevicePresetFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: { artifactId: string; devicePreset: string | null }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { updateArtifactDevicePreset } = await import('../mcp/db.js')
+    updateArtifactDevicePreset(data.artifactId, data.devicePreset)
+    return { ok: true }
+  })
+
 export const loadProjects = createServerFn({ method: 'GET' }).handler(
   async () => {
     const { getAllProjects } = await import('../mcp/db.js')

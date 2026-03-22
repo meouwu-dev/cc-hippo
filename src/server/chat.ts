@@ -82,6 +82,10 @@ export const chatStream = createServerFn({ method: 'POST' })
       `  - "preview" for HTML preview files`,
       `  - "component" for reusable components`,
       `  - "other" for anything else`,
+      `- When saving HTML preview artifacts, set devicePreset to match the intended viewport:`,
+      `  - "mobile" (390×844) for mobile-first or phone layouts`,
+      `  - "tablet" (768×1024) for tablet layouts`,
+      `  - "desktop" (1440×1024) for full-width desktop layouts`,
       `- After saving artifacts, call linkArtifacts to declare relationships between them:`,
       `  - "references" when one doc references another`,
       `  - "implements" when a preview implements a design or requirement`,
@@ -273,6 +277,17 @@ export const chatStream = createServerFn({ method: 'POST' })
               const questions = (block.input as Record<string, unknown>)
                 .questions
               send({ type: 'askUser', questions })
+            }
+            // Intercept saveArtifact MCP tool to forward devicePreset
+            if (
+              block.name === 'mcp__seal__saveArtifact' &&
+              input?.devicePreset
+            ) {
+              send({
+                type: 'devicePreset',
+                path: input.path,
+                preset: input.devicePreset,
+              })
             }
             // Intercept switchPage MCP tool to emit page navigation event
             if (block.name === 'mcp__seal__switchPage' && input?.pageId) {

@@ -13,6 +13,7 @@ import {
   saveArtifactPositionFn,
   saveArtifactPositionByPathFn,
   saveArtifactMinimizedFn,
+  saveArtifactDevicePresetFn,
 } from '../server/state.js'
 import type { SectionNodeData } from '../components/section-node.js'
 import type { ArtifactRow, EdgeRow, SectionRow } from '../mcp/db.js'
@@ -596,6 +597,12 @@ export function useCanvasNodes(
               size.width,
               size.height,
             )
+            saveArtifactDevicePresetFn({
+              data: {
+                artifactId: d.artifactId,
+                devicePreset: preset ?? null,
+              },
+            })
           }
           return {
             ...n,
@@ -640,6 +647,14 @@ export function useCanvasNodes(
     }
   }, [setDevicePreset, closeSection])
 
+  const setDevicePresetByPath = useCallback(
+    (path: string, preset: DevicePreset) => {
+      const nodeId = `artifact-${path}`
+      setDevicePreset(nodeId, preset)
+    },
+    [setDevicePreset],
+  )
+
   const clearCanvas = useCallback(() => {
     setNodes([])
     setEdges([])
@@ -658,6 +673,7 @@ export function useCanvasNodes(
     toggleMinimizeArtifact,
     closeSection,
     clearCanvas,
+    setDevicePresetByPath,
     savedViewport,
   }
 }

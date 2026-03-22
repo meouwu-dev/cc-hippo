@@ -192,10 +192,25 @@ server.registerTool(
         .describe(
           'ID of the page to place this artifact on. If omitted, uses the default page.',
         ),
+      devicePreset: z
+        .enum(['desktop', 'tablet', 'mobile'])
+        .optional()
+        .describe(
+          'Device viewport preset for this artifact. Sets the node size on the canvas. Use "desktop" (1440×1024) for full-width layouts, "tablet" (768×1024) for tablet views, "mobile" (390×844) for mobile-first designs.',
+        ),
     },
   },
-  async ({ path, filename, content, type, pageId }) => {
-    upsertArtifact(projectId, path, filename, content, type, pageId)
+  async ({ path, filename, content, type, pageId, devicePreset }) => {
+    upsertArtifact(
+      projectId,
+      path,
+      filename,
+      content,
+      type,
+      pageId,
+      undefined,
+      devicePreset,
+    )
     return {
       content: [{ type: 'text', text: `Saved artifact: ${path} (${type})` }],
     }
