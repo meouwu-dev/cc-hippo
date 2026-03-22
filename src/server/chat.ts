@@ -211,6 +211,8 @@ export const chatStream = createServerFn({ method: 'POST' })
           return `Moving ${input.path || 'artifact'}...`
         case 'mcp__seal__calcPosition':
           return 'Calculating position...'
+        case 'mcp__seal__setViewport':
+          return 'Adjusting viewport...'
         default:
           return `Using ${name}...`
       }
