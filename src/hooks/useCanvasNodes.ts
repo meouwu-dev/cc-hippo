@@ -37,6 +37,7 @@ export interface ArtifactNodeData extends Record<string, unknown> {
   devicePreset?: DevicePreset
   minimized?: boolean
   preMinimizeHeight?: number
+  streaming?: boolean
 }
 
 const EDGE_COLORS: Record<string, string> = {
@@ -745,6 +746,36 @@ export function useCanvasNodes(
     [],
   )
 
+  const markNodeStreaming = useCallback((path: string) => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (
+          n.type === 'artifact' &&
+          (n.data as ArtifactNodeData).file.path === path
+        ) {
+          const d = n.data as ArtifactNodeData
+          if (d.streaming) return n
+          return { ...n, data: { ...d, streaming: true } }
+        }
+        return n
+      }),
+    )
+  }, [])
+
+  const clearAllStreaming = useCallback(() => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (
+          n.type === 'artifact' &&
+          (n.data as ArtifactNodeData).streaming
+        ) {
+          return { ...n, data: { ...n.data, streaming: false } }
+        }
+        return n
+      }),
+    )
+  }, [])
+
   const clearCanvas = useCallback(() => {
     setNodes([])
     setEdges([])
@@ -763,6 +794,8 @@ export function useCanvasNodes(
     toggleMinimizeArtifact,
     closeSection,
     clearCanvas,
+    markNodeStreaming,
+    clearAllStreaming,
     setDevicePresetByPath,
     moveArtifactByPath,
     savedViewport,

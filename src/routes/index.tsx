@@ -719,6 +719,8 @@ function CanvasPage({
     openArtifactBatch,
     startNewRow,
     toggleMinimizeArtifact,
+    markNodeStreaming,
+    clearAllStreaming,
     setDevicePresetByPath,
     moveArtifactByPath,
     savedViewport,
@@ -768,7 +770,10 @@ function CanvasPage({
 
   // Register canvas callbacks so useChat (in parent) can reach them
   useEffect(() => {
-    fileCreatedRef.current = (file: ArtifactFile) => openArtifact(file)
+    fileCreatedRef.current = (file: ArtifactFile) => {
+      openArtifact(file)
+      markNodeStreaming(file.path)
+    }
     edgeCreatedRef.current = (edge) =>
       addEdge(edge.source, edge.target, edge.kind)
     batchCreatedRef.current = (files: ArtifactFile[]) => {
@@ -799,9 +804,17 @@ function CanvasPage({
     addEdge,
     openArtifactBatch,
     startNewRow,
+    markNodeStreaming,
     setDevicePresetByPath,
     moveArtifactByPath,
   ])
+
+  // Clear streaming indicators when AI finishes
+  useEffect(() => {
+    if (!isStreaming) {
+      clearAllStreaming()
+    }
+  }, [isStreaming, clearAllStreaming])
 
   // Listen for close-artifact events from nodes
   useEffect(() => {

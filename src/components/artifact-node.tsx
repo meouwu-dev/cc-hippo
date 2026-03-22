@@ -30,7 +30,7 @@ function ArtifactNodeInner({
   data,
   id,
 }: NodeProps & { data: ArtifactNodeData }) {
-  const { file, devicePreset, minimized } = data
+  const { file, devicePreset, minimized, streaming } = data
   const ext = (file.path || file.filename).split('.').pop()?.toLowerCase() || ''
 
   const handleSetDevice = useCallback(
@@ -87,6 +87,14 @@ function ArtifactNodeInner({
             >
               {file.filename}
             </span>
+            {streaming && (
+              <div className="flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5">
+                <div className="size-1.5 animate-pulse rounded-full bg-primary" />
+                <span className="text-[10px] font-medium text-primary">
+                  Writing
+                </span>
+              </div>
+            )}
             {devicePreset && (
               <Badge variant="secondary" className="h-4 text-[10px] capitalize">
                 {devicePreset}
