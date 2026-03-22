@@ -99,57 +99,6 @@ const EFFORTS = [
   { value: 'max', label: 'Max' },
 ]
 
-function StatusIndicator({ status }: { status: StreamStatus }) {
-  if (status.phase === 'idle') return null
-
-  const labels: Record<string, string> = {
-    connecting: 'Connecting to Claude...',
-    responding: 'Writing response...',
-  }
-
-  let label: string
-  let icon: React.ReactNode = null
-
-  switch (status.phase) {
-    case 'thinking':
-      label = 'Thinking...'
-      icon = (
-        <Brain
-          size={12}
-          className="shrink-0 animate-spin text-muted-foreground"
-        />
-      )
-      break
-    case 'tool':
-      label = status.detail
-      icon = (
-        <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />
-      )
-      break
-    case 'error':
-      label = status.message
-      icon = <span className="size-1.5 shrink-0 rounded-full bg-destructive" />
-      break
-    default:
-      label = labels[status.phase] || status.phase
-      icon = (
-        <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />
-      )
-  }
-
-  return (
-    <div
-      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ${
-        status.phase === 'error'
-          ? 'bg-destructive/10 text-destructive'
-          : 'bg-muted/50 text-muted-foreground'
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-    </div>
-  )
-}
 
 function ThinkingBlock({
   blocks,
@@ -358,26 +307,84 @@ function formatDuration(ms: number) {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
-function formatCost(usd: number) {
-  if (usd < 0.01) return `$${usd.toFixed(4)}`
-  return `$${usd.toFixed(2)}`
-}
 
-function UsageBanner({ usage }: { usage: UsageInfo }) {
+function InfoBar({
+  usage,
+  status,
+  isStreaming,
+}: {
+  usage: UsageInfo | null
+  status: StreamStatus
+  isStreaming: boolean
+}) {
+  const showStatus = isStreaming && status.phase !== 'idle'
+
+  if (!usage && !showStatus) return null
+
+  const labels: Record<string, string> = {
+    connecting: 'Connecting to Claude...',
+    responding: 'Writing response...',
+  }
+
+  let statusLabel: string | null = null
+  let statusIcon: React.ReactNode = null
+
+  if (showStatus) {
+    switch (status.phase) {
+      case 'thinking':
+        statusLabel = 'Thinking...'
+        statusIcon = (
+          <Brain
+            size={10}
+            className="shrink-0 animate-spin text-muted-foreground"
+          />
+        )
+        break
+      case 'tool':
+        statusLabel = status.detail
+        statusIcon = (
+          <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />
+        )
+        break
+      case 'error':
+        statusLabel = status.message
+        statusIcon = (
+          <span className="size-1.5 shrink-0 rounded-full bg-destructive" />
+        )
+        break
+      default:
+        statusLabel = labels[status.phase] || status.phase
+        statusIcon = (
+          <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />
+        )
+    }
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-      {usage.duration_ms > 0 && (
-        <span>{formatDuration(usage.duration_ms)}</span>
+    <div className="flex items-center gap-x-3 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+      {usage && (
+        <>
+          {usage.duration_ms > 0 && (
+            <span>{formatDuration(usage.duration_ms)}</span>
+          )}
+          <span title="Input tokens">
+            {formatTokens(usage.input_tokens)} in
+          </span>
+          <span title="Output tokens">
+            {formatTokens(usage.output_tokens)} out
+          </span>
+          {usage.cache_read_tokens > 0 && (
+            <span title="Cache read tokens">
+              {formatTokens(usage.cache_read_tokens)} cached
+            </span>
+          )}
+        </>
       )}
-      <span title="Input tokens">{formatTokens(usage.input_tokens)} in</span>
-      <span title="Output tokens">{formatTokens(usage.output_tokens)} out</span>
-      {usage.cache_read_tokens > 0 && (
-        <span title="Cache read tokens">
-          {formatTokens(usage.cache_read_tokens)} cached
+      {showStatus && statusLabel && (
+        <span className="ml-auto flex min-w-0 items-center gap-1.5">
+          {statusIcon}
+          <span className="truncate">{statusLabel}</span>
         </span>
-      )}
-      {usage.total_cost_usd > 0 && (
-        <span className="ml-auto">{formatCost(usage.total_cost_usd)}</span>
       )}
     </div>
   )
@@ -418,16 +425,37 @@ export default function ChatPanel({
   const setEffort = (v: string) =>
     onEffortChange(v === 'default' ? 'default' : v)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(messages.length)
+  const userScrolledUpRef = useRef(false)
 
+  // Track if user has scrolled away from bottom
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const handleScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+      userScrolledUpRef.current = !atBottom
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [collapsed])
+
+  // Auto-scroll on new messages or during streaming content updates
   useEffect(() => {
     const prevCount = prevMessageCountRef.current
     prevMessageCountRef.current = messages.length
-    // Only auto-scroll when messages are appended, not when swapped (page change)
+    // New message added — always scroll
     if (messages.length > prevCount) {
+      userScrolledUpRef.current = false
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      return
     }
-  }, [messages, status])
+    // Streaming content update — scroll only if user hasn't scrolled up
+    if (isStreaming && !userScrolledUpRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
+    }
+  }, [messages, status, isStreaming])
 
   const handleSubmit = () => {
     const text = input.trim()
@@ -621,7 +649,7 @@ export default function ChatPanel({
 
         {!collapsed && (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
               <div className="flex min-h-[200px] flex-col gap-3 p-3">
                 {messages.length === 0 && (
                   <div className="mt-10 text-center text-xs text-muted-foreground">
@@ -715,8 +743,6 @@ export default function ChatPanel({
                     onDismiss={dismissQuestions}
                   />
                 )}
-                {isStreaming && <StatusIndicator status={status} />}
-                {usage && <UsageBanner usage={usage} />}
                 <div ref={messagesEndRef} />
               </div>
             </div>
@@ -725,6 +751,7 @@ export default function ChatPanel({
       </div>
 
       <div className="flex shrink-0 flex-col gap-1.5 rounded-xl border border-border/50 bg-[var(--bg-surface)] p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+        <InfoBar usage={usage} status={status} isStreaming={isStreaming} />
         {selectedNodes.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-[11px] text-muted-foreground">Selected:</span>
