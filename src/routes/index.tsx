@@ -82,7 +82,14 @@ function ProjectShell() {
   } = useProject()
 
   if (loading || !currentProjectId) {
-    return <div className="canvas-app" />
+    return (
+      <div className="canvas-app items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-8 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Loading…</span>
+        </div>
+      </div>
+    )
   }
 
   return (
