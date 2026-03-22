@@ -16,8 +16,8 @@ import ChatPanel from '../components/chat-panel.js'
 import ArtifactNode from '../components/artifact-node.js'
 import SectionNode from '../components/section-node.js'
 import { useChat } from '../hooks/useChat.js'
-import { useCanvasNodes  } from '../hooks/useCanvasNodes.js'
-import type {ViewportInfo, DevicePreset} from '../hooks/useCanvasNodes.js';
+import { useCanvasNodes } from '../hooks/useCanvasNodes.js'
+import type { ViewportInfo, DevicePreset } from '../hooks/useCanvasNodes.js'
 import { useProject } from '../hooks/useProject.js'
 import { useConversation } from '../hooks/useConversation.js'
 import { appMeta } from '../consts.js'
@@ -186,14 +186,9 @@ function CanvasApp({
     [projectId],
   )
 
-  const onRenamePage = useCallback(
-    (pageId: string, name: string) => {
-      setPages((prev) =>
-        prev.map((p) => (p.id === pageId ? { ...p, name } : p)),
-      )
-    },
-    [],
-  )
+  const onRenamePage = useCallback((pageId: string, name: string) => {
+    setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, name } : p)))
+  }, [])
 
   // useChat lives here — survives page switches
   const {
@@ -364,7 +359,7 @@ function CanvasApp({
 
   return (
     <div className="canvas-app">
-      <div className="flex shrink-0 items-center gap-0.5 border-b border-border/50 bg-background px-2 py-1">
+      <div className="flex shrink-0 items-center gap-0.5 border-b border-border/50 bg-background px-2">
         <div className="flex items-center gap-1.5 px-2 py-1">
           <img src={appMeta.icon} alt={appMeta.name} className="size-5" />
           <span className="text-sm font-semibold text-foreground">
@@ -373,66 +368,68 @@ function CanvasApp({
         </div>
         <div className="mx-1 h-4 w-px bg-border/50" />
         {pages.map((p) => (
-          <div
-            key={p.id}
-            className={`group/tab flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-[13px] transition-colors select-none ${
-              p.id === currentPageId
-                ? 'bg-card text-foreground'
-                : 'text-muted-foreground hover:bg-muted/30'
-            }`}
-            onClick={() => setCurrentPageId(p.id)}
-          >
-            {editingPageId === p.id ? (
-              <Input
-                className="h-5 w-[100px] text-[13px]"
-                value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
-                onBlur={handleFinishRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleFinishRename()
-                  if (e.key === 'Escape') setEditingPageId(null)
-                }}
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span
-                onDoubleClick={(e) => {
-                  e.stopPropagation()
-                  handleStartRename(p.id, p.name)
-                }}
-              >
-                {p.name}
-              </span>
-            )}
-            {editingPageId !== p.id && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
-                  onClick={(e) => {
+          <div className="pt-1">
+            <div
+              key={p.id}
+              className={`group/tab flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-[13px] transition-colors select-none ${
+                p.id === currentPageId
+                  ? 'bg-card text-foreground'
+                  : 'text-muted-foreground hover:bg-muted/30'
+              }`}
+              onClick={() => setCurrentPageId(p.id)}
+            >
+              {editingPageId === p.id ? (
+                <Input
+                  className="h-5 w-[100px] text-[13px]"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={handleFinishRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleFinishRename()
+                    if (e.key === 'Escape') setEditingPageId(null)
+                  }}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  onDoubleClick={(e) => {
                     e.stopPropagation()
                     handleStartRename(p.id, p.name)
                   }}
                 >
-                  <Pencil size={9} />
-                </Button>
-                {pages.length > 1 && (
+                  {p.name}
+                </span>
+              )}
+              {editingPageId !== p.id && (
+                <>
                   <Button
                     variant="ghost"
                     size="icon-xs"
                     className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleDeletePage(p.id)
+                      handleStartRename(p.id, p.name)
                     }}
                   >
-                    <X size={10} />
+                    <Pencil size={9} />
                   </Button>
-                )}
-              </>
-            )}
+                  {pages.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-4 opacity-0 group-hover/tab:opacity-50 hover:!opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeletePage(p.id)
+                      }}
+                    >
+                      <X size={10} />
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         ))}
         <Button
