@@ -159,6 +159,14 @@ function ThinkingBlock({
   defaultExpanded?: boolean
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  const userToggledRef = useRef(false)
+
+  // Auto-collapse when content arrives (defaultExpanded goes false)
+  useEffect(() => {
+    if (!userToggledRef.current && !defaultExpanded) {
+      setExpanded(false)
+    }
+  }, [defaultExpanded])
   const [index, setIndex] = useState(0)
   const userNavigatedRef = useRef(false)
   const blockRef = useRef<HTMLDivElement>(null)
@@ -181,6 +189,7 @@ function ThinkingBlock({
     <Collapsible
       open={expanded}
       onOpenChange={(open) => {
+        userToggledRef.current = true
         setExpanded(open)
         if (open) {
           requestAnimationFrame(() => {
