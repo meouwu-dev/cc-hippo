@@ -248,7 +248,7 @@ function ThinkingBlock({
           className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-[starting-style]:h-0 data-[ending-style]:h-0"
         >
           <div className="h-32 overflow-auto whitespace-pre-wrap break-words px-2 pb-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            {current}
+            {current?.trim().replace(/\n{3,}/g, '\n\n')}
           </div>
         </CollapsibleContent>
       </div>
