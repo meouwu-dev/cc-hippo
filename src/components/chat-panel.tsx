@@ -204,7 +204,7 @@ function ThinkingBlock({
             />
             <Brain size={12} />
             <span>
-              Internal reasoning{total > 1 ? ` (${total} blocks)` : ''}
+              Thinking{total > 1 ? ` (${total} blocks)` : ''}
             </span>
           </CollapsibleTrigger>
           {total > 1 && expanded && (
@@ -628,7 +628,7 @@ export default function ChatPanel({
                       <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-border px-3 py-2 text-[13px] leading-relaxed text-foreground">
                         <Markdown>{msg.content}</Markdown>
                       </div>
-                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100">
+                      <div className="flex items-center gap-0.5">
                         {msg.timestamp && (
                           <span className="text-[10px] leading-none text-muted-foreground">
                             {new Date(msg.timestamp).toLocaleTimeString([], {
@@ -660,7 +660,7 @@ export default function ChatPanel({
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         {msg.timestamp && (
-                          <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/assistant:opacity-100">
+                          <span className="text-[10px] text-muted-foreground">
                             {new Date(msg.timestamp).toLocaleTimeString([], {
                               hour: '2-digit',
                               minute: '2-digit',
