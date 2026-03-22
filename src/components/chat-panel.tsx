@@ -153,20 +153,20 @@ function StatusIndicator({ status }: { status: StreamStatus }) {
 
 function ThinkingBlock({
   blocks,
-  defaultExpanded = false,
+  autoExpand = false,
 }: {
   blocks: string[]
-  defaultExpanded?: boolean
+  autoExpand?: boolean
 }) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [expanded, setExpanded] = useState(false)
   const userToggledRef = useRef(false)
 
-  // Auto-collapse when content arrives (defaultExpanded goes false)
+  // Auto-expand when streaming finishes and there's no text content
   useEffect(() => {
-    if (!userToggledRef.current && !defaultExpanded) {
-      setExpanded(false)
+    if (!userToggledRef.current && autoExpand) {
+      setExpanded(true)
     }
-  }, [defaultExpanded])
+  }, [autoExpand])
   const [index, setIndex] = useState(0)
   const userNavigatedRef = useRef(false)
   const blockRef = useRef<HTMLDivElement>(null)
@@ -679,7 +679,9 @@ export default function ChatPanel({
                         {msg.thinking?.length ? (
                           <ThinkingBlock
                             blocks={msg.thinking}
-                            defaultExpanded={!msg.content?.trim()}
+                            autoExpand={
+                              !isStreaming && !msg.content?.trim()
+                            }
                           />
                         ) : null}
                         {msg.content?.trim() && (
