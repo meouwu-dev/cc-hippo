@@ -93,6 +93,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       `When you need the user to choose between alternatives, call the askUser MCP tool.`,
       `NEVER use the AskUserQuestion tool — it does not work in this app. ONLY use mcp__seal__askUser.`,
       `It supports multiple questions at once — each with predefined options and an optional custom text input.`,
+      `Options are plain strings (NOT objects) — e.g. ["Option A", "Option B"], not [{label: "..."}].`,
       `The app renders these as interactive forms with clickable buttons. The user's answers are returned as Q&A pairs.`,
       `NEVER present options as markdown numbered/bulleted lists — always use askUser.`,
       `Keep option text short (under 50 chars). You can ask multiple questions in a single call.`,
@@ -203,6 +204,8 @@ export const chatStream = createServerFn({ method: 'POST' })
     const fileContents = new Map<string, string>()
     // Accumulate all thinking blocks across assistant events
     const allThinkingBlocks: string[] = []
+    // Track processed tool_use block IDs to avoid duplicate SSE events
+    const processedToolIds = new Set<string>()
 
     const handleClaudeEvent = (
       event: Record<string, unknown>,
@@ -239,6 +242,9 @@ export const chatStream = createServerFn({ method: 'POST' })
             send({ type: 'text', content: block.text })
           }
           if (block.type === 'tool_use') {
+            const toolId = block.id as string
+            if (processedToolIds.has(toolId)) continue
+            processedToolIds.add(toolId)
             const input = block.input as Record<string, string> | undefined
             if (input?.file_path?.startsWith(outputDir)) {
               const relativePath = path.relative(outputDir, input.file_path)
