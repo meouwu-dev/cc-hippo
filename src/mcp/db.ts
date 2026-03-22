@@ -340,6 +340,20 @@ export function updateArtifactPosition(
   ).run(x, y, w, h, id)
 }
 
+export function updateArtifactPositionByPath(
+  projectId: string,
+  path: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  const db = getDb()
+  db.prepare(
+    "UPDATE artifacts SET position_x = ?, position_y = ?, width = ?, height = ?, updated_at = datetime('now') WHERE project_id = ? AND path = ?",
+  ).run(x, y, w, h, projectId, path)
+}
+
 export function updateArtifactMinimized(
   id: string,
   minimized: boolean,

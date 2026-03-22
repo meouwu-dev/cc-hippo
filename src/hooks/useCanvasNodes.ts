@@ -11,6 +11,7 @@ import type { ArtifactFile } from './useChat.js'
 import {
   loadCanvasDataFn,
   saveArtifactPositionFn,
+  saveArtifactPositionByPathFn,
   saveArtifactMinimizedFn,
 } from '../server/state.js'
 import type { SectionNodeData } from '../components/section-node.js'
@@ -127,16 +128,26 @@ function debouncedSavePosition(
   y: number,
   w: number,
   h: number,
+  projectId?: string,
+  path?: string,
 ) {
-  const existing = positionTimers.get(artifactId)
+  const key = artifactId || path || ''
+  if (!key) return
+  const existing = positionTimers.get(key)
   if (existing) clearTimeout(existing)
   positionTimers.set(
-    artifactId,
+    key,
     setTimeout(() => {
-      positionTimers.delete(artifactId)
-      saveArtifactPositionFn({
-        data: { artifactId, x, y, w, h },
-      })
+      positionTimers.delete(key)
+      if (artifactId) {
+        saveArtifactPositionFn({
+          data: { artifactId, x, y, w, h },
+        })
+      } else if (projectId && path) {
+        saveArtifactPositionByPathFn({
+          data: { projectId, path, x, y, w, h },
+        })
+      }
     }, 500),
   )
 }
@@ -208,6 +219,8 @@ export function useCanvasNodes(
               change.position.y,
               w,
               h,
+              projectId,
+              d.file.path,
             )
           }
         }
@@ -221,6 +234,8 @@ export function useCanvasNodes(
               node.position.y,
               change.dimensions.width,
               change.dimensions.height,
+              projectId,
+              d.file.path,
             )
           }
         }
@@ -228,7 +243,7 @@ export function useCanvasNodes(
 
       return next
     })
-  }, [])
+  }, [projectId])
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     setEdges((prev) => applyEdgeChanges(changes, prev))
@@ -418,9 +433,14 @@ export function useCanvasNodes(
         style: { width: NODE_W, height: NODE_H },
       }
 
+      // Persist computed position to DB so it survives refresh
+      saveArtifactPositionByPathFn({
+        data: { projectId, path: file.path, x, y, w: NODE_W, h: NODE_H },
+      })
+
       return [...prev, newNode]
     })
-  }, [])
+  }, [projectId])
 
   const openArtifactBatch = useCallback(
     (files: ArtifactFile[], sectionName?: string) => {
@@ -483,21 +503,26 @@ export function useCanvasNodes(
           style: { width: sectionW, height: sectionH },
         }
 
-        const childNodes: Node[] = newFiles.map((file, i) => ({
-          id: `artifact-${file.path}`,
-          type: 'artifact',
-          position: {
-            x: padding + i * (nodeW + gap),
-            y: headerH + padding,
-          },
-          parentId: sectionId,
-          data: {
-            file,
-            label: file.filename,
-            artifactId: '',
-          } satisfies ArtifactNodeData,
-          style: { width: nodeW, height: nodeH },
-        }))
+        const childNodes: Node[] = newFiles.map((file, i) => {
+          const cx = padding + i * (nodeW + gap)
+          const cy = headerH + padding
+          // Persist computed position to DB so it survives refresh
+          saveArtifactPositionByPathFn({
+            data: { projectId, path: file.path, x: cx, y: cy, w: nodeW, h: nodeH },
+          })
+          return {
+            id: `artifact-${file.path}`,
+            type: 'artifact',
+            position: { x: cx, y: cy },
+            parentId: sectionId,
+            data: {
+              file,
+              label: file.filename,
+              artifactId: '',
+            } satisfies ArtifactNodeData,
+            style: { width: nodeW, height: nodeH },
+          }
+        })
 
         const updated = prev.map((n) => {
           if (n.type !== 'artifact') return n

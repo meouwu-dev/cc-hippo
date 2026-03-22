@@ -78,6 +78,30 @@ export const saveArtifactPositionFn = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
+export const saveArtifactPositionByPathFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: {
+      projectId: string
+      path: string
+      x: number
+      y: number
+      w: number
+      h: number
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { updateArtifactPositionByPath } = await import('../mcp/db.js')
+    updateArtifactPositionByPath(
+      data.projectId,
+      data.path,
+      data.x,
+      data.y,
+      data.w,
+      data.h,
+    )
+    return { ok: true }
+  })
+
 export const saveArtifactMinimizedFn = createServerFn({ method: 'POST' })
   .inputValidator(
     (input: {
