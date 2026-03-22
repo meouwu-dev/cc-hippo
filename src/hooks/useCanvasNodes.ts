@@ -14,6 +14,7 @@ import {
   saveArtifactPositionByPathFn,
   saveArtifactMinimizedFn,
   saveArtifactDevicePresetFn,
+  upsertArtifactFn,
 } from '../server/state.js'
 import type { SectionNodeData } from '../components/section-node.js'
 import type { ArtifactRow, EdgeRow, SectionRow } from '../mcp/db.js'
@@ -359,6 +360,21 @@ export function useCanvasNodes(
       if (existingIdx !== -1) {
         const existing = prev[existingIdx]
         const wasMinimized = (existing.data as ArtifactNodeData).minimized
+        // Persist updated content to DB
+        const w = (existing.style?.width as number) || NODE_W
+        const h = (existing.style?.height as number) || NODE_H
+        upsertArtifactFn({
+          data: {
+            projectId,
+            path: file.path,
+            filename: file.filename,
+            content: file.content,
+            x: existing.position.x,
+            y: existing.position.y,
+            w,
+            h,
+          },
+        })
         return prev.map((n, i) => {
           if (i !== existingIdx) return n
           const d = n.data as ArtifactNodeData
@@ -434,9 +450,18 @@ export function useCanvasNodes(
         style: { width: NODE_W, height: NODE_H },
       }
 
-      // Persist computed position to DB so it survives refresh
-      saveArtifactPositionByPathFn({
-        data: { projectId, path: file.path, x, y, w: NODE_W, h: NODE_H },
+      // Upsert artifact to DB so it survives refresh even before MCP saveArtifact
+      upsertArtifactFn({
+        data: {
+          projectId,
+          path: file.path,
+          filename: file.filename,
+          content: file.content,
+          x,
+          y,
+          w: NODE_W,
+          h: NODE_H,
+        },
       })
 
       return [...prev, newNode]
@@ -507,9 +532,18 @@ export function useCanvasNodes(
         const childNodes: Node[] = newFiles.map((file, i) => {
           const cx = padding + i * (nodeW + gap)
           const cy = headerH + padding
-          // Persist computed position to DB so it survives refresh
-          saveArtifactPositionByPathFn({
-            data: { projectId, path: file.path, x: cx, y: cy, w: nodeW, h: nodeH },
+          // Upsert artifact to DB so it survives refresh
+          upsertArtifactFn({
+            data: {
+              projectId,
+              path: file.path,
+              filename: file.filename,
+              content: file.content,
+              x: cx,
+              y: cy,
+              w: nodeW,
+              h: nodeH,
+            },
           })
           return {
             id: `artifact-${file.path}`,

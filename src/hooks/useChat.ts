@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { chatStream } from '../server/chat.js'
 import {
   loadChatMessages,
@@ -138,6 +138,25 @@ export function useChat({
     [conversationId],
   )
 
+  // Debounced persist for use during streaming (saves partial progress)
+  const debouncedPersistRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debouncedPersist = useMemo(
+    () => (msgs: ChatMessage[]) => {
+      if (debouncedPersistRef.current) clearTimeout(debouncedPersistRef.current)
+      debouncedPersistRef.current = setTimeout(() => {
+        persistMessages(msgs)
+        debouncedPersistRef.current = null
+      }, 2000)
+    },
+    [persistMessages],
+  )
+  // Flush on unmount
+  useEffect(() => {
+    return () => {
+      if (debouncedPersistRef.current) clearTimeout(debouncedPersistRef.current)
+    }
+  }, [])
+
   const sendMessage = useCallback(
     async (
       text: string,
@@ -239,13 +258,15 @@ export function useChat({
                     content: blocks[blocks.length - 1],
                   })
                 }
-                setMessages((prev) =>
-                  prev.map((m) =>
+                setMessages((prev) => {
+                  const next = prev.map((m) =>
                     m.id === assistantMsg.id
                       ? { ...m, thinking: [...thinkingBlocks] }
                       : m,
-                  ),
-                )
+                  )
+                  debouncedPersist(next)
+                  return next
+                })
               }
 
               if (data.type === 'text') {
@@ -254,11 +275,13 @@ export function useChat({
                   gotFirstContent = true
                   setStatus({ phase: 'responding' })
                 }
-                setMessages((prev) =>
-                  prev.map((m) =>
+                setMessages((prev) => {
+                  const next = prev.map((m) =>
                     m.id === assistantMsg.id ? { ...m, content: fullText } : m,
-                  ),
-                )
+                  )
+                  debouncedPersist(next)
+                  return next
+                })
               }
 
               if (data.type === 'status') {
@@ -287,13 +310,15 @@ export function useChat({
                     : [...prev, file]
                   return next
                 })
-                setMessages((prev) =>
-                  prev.map((m) =>
+                setMessages((prev) => {
+                  const next = prev.map((m) =>
                     m.id === assistantMsg.id
                       ? { ...m, artifacts: [...msgArtifacts] }
                       : m,
-                  ),
-                )
+                  )
+                  debouncedPersist(next)
+                  return next
+                })
                 onFileCreatedRef.current?.(file)
               }
 
@@ -351,6 +376,11 @@ export function useChat({
               }
 
               if (data.type === 'done') {
+                // Cancel any pending debounced persist — we'll do a final one
+                if (debouncedPersistRef.current) {
+                  clearTimeout(debouncedPersistRef.current)
+                  debouncedPersistRef.current = null
+                }
                 if (data.code !== 0) {
                   setStatus({
                     phase: 'error',
@@ -372,7 +402,18 @@ export function useChat({
           }
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
+        // Flush debounced persist so partial progress is saved
+        if (debouncedPersistRef.current) {
+          clearTimeout(debouncedPersistRef.current)
+          debouncedPersistRef.current = null
+        }
+        if ((err as Error).name === 'AbortError') {
+          // User stopped — persist partial progress
+          setMessages((prev) => {
+            persistMessages(prev)
+            return prev
+          })
+        } else {
           const errMsg = (err as Error).message
           setStatus({ phase: 'error', message: errMsg })
           setMessages((prev) => {
@@ -391,7 +432,7 @@ export function useChat({
         abortRef.current = null
       }
     },
-    [messages, persistMessages],
+    [messages, persistMessages, debouncedPersist],
   )
 
   const stop = useCallback(() => {

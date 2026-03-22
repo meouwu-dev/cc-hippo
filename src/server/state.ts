@@ -78,6 +78,36 @@ export const saveArtifactPositionFn = createServerFn({ method: 'POST' })
     return { ok: true }
   })
 
+export const upsertArtifactFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: {
+      projectId: string
+      pageId?: string | null
+      path: string
+      filename: string
+      content: string
+      x: number
+      y: number
+      w: number
+      h: number
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { upsertArtifactWithPosition } = await import('../mcp/db.js')
+    upsertArtifactWithPosition(
+      data.projectId,
+      data.pageId ?? null,
+      data.path,
+      data.filename,
+      data.content,
+      data.x,
+      data.y,
+      data.w,
+      data.h,
+    )
+    return { ok: true }
+  })
+
 export const saveArtifactPositionByPathFn = createServerFn({ method: 'POST' })
   .inputValidator(
     (input: {

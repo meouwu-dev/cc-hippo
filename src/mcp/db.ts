@@ -354,6 +354,38 @@ export function updateArtifactPositionByPath(
   ).run(x, y, w, h, projectId, path)
 }
 
+/**
+ * Upsert artifact row with content AND position in one shot.
+ * Called when the client receives a file SSE event so the artifact
+ * exists in DB immediately — not only after the MCP saveArtifact call.
+ */
+export function upsertArtifactWithPosition(
+  projectId: string,
+  pageId: string | null,
+  path: string,
+  filename: string,
+  content: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  const db = getDb()
+  const resolvedPageId = pageId ?? ensureDefaultPage(projectId).id
+  db.prepare(
+    `INSERT INTO artifacts (id, project_id, page_id, path, filename, content, type, position_x, position_y, width, height)
+     VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, 'other', ?, ?, ?, ?)
+     ON CONFLICT(project_id, path) DO UPDATE SET
+       filename = excluded.filename,
+       content = excluded.content,
+       position_x = excluded.position_x,
+       position_y = excluded.position_y,
+       width = excluded.width,
+       height = excluded.height,
+       updated_at = datetime('now')`,
+  ).run(projectId, resolvedPageId, path, filename, content, x, y, w, h)
+}
+
 export function updateArtifactDevicePreset(
   id: string,
   devicePreset: string | null,

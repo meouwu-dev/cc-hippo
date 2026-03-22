@@ -295,6 +295,16 @@ function CanvasApp({
     prevStreamingRef.current = isStreaming
   }, [isStreaming, projectId])
 
+  // Warn before leaving while AI is generating
+  useEffect(() => {
+    if (!isStreaming) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isStreaming])
+
   const handleCreatePage = useCallback(async () => {
     const name = `Page ${pages.length + 1}`
     const page = (await createPageFn({
