@@ -25,7 +25,7 @@ export const chatStream = createServerFn({ method: 'POST' })
 
     const __dirname = path.dirname(fileURLToPath(import.meta.url))
     const projectRoot = path.resolve(__dirname, '../..')
-    const outputDir = path.resolve(projectRoot, 'output')
+    const outputDir = path.resolve(projectRoot, 'output', data.projectId)
     const skillDir = path.resolve(projectRoot, 'skills/ui-design-system')
 
     // Debug logging
@@ -37,12 +37,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       console.warn(`[chat] WARNING: Skill directory not found!`)
     }
 
-    // Clean and recreate output dir each request — files are only needed
-    // temporarily for the claude CLI subprocess; we stream content to the
-    // client via SSE and persist in IndexedDB, so nothing reads from disk.
-    if (fs.existsSync(outputDir)) {
-      fs.rmSync(outputDir, { recursive: true })
-    }
+    // Ensure output dir exists for this project (persisted across messages)
     fs.mkdirSync(outputDir, { recursive: true })
 
     const { message, isFirstMessage, model, effort } = data
