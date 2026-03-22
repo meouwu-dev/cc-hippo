@@ -473,6 +473,52 @@ server.registerTool(
   },
 )
 
+server.registerTool(
+  'setViewport',
+  {
+    description:
+      'Pan and zoom the canvas viewport so the user can see specific content. Use this after placing or updating artifacts to frame them nicely. Only takes effect if the user has not manually moved the canvas recently (~3s idle). The client computes the best zoom/position from actual node data — you just say what to show.',
+    inputSchema: {
+      mode: z
+        .enum(['fitAll', 'fitPaths', 'center'])
+        .default('fitAll')
+        .describe(
+          '"fitAll" = zoom to fit every artifact on screen. "fitPaths" = zoom to fit the listed artifact paths. "center" = center on a specific coordinate with explicit zoom.',
+        ),
+      paths: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Artifact paths to fit into view (for "fitPaths" mode). e.g. ["login.html", "signup.html"]',
+        ),
+      x: z.number().optional().describe('X coordinate for "center" mode'),
+      y: z.number().optional().describe('Y coordinate for "center" mode'),
+      zoom: z
+        .number()
+        .optional()
+        .describe('Zoom level for "center" mode (0.1–3, default 1)'),
+      padding: z
+        .number()
+        .optional()
+        .default(80)
+        .describe(
+          'Padding in pixels around the fitted content (for fitAll/fitPaths modes)',
+        ),
+    },
+  },
+  async ({ mode, paths, x, y, zoom }) => {
+    const details =
+      mode === 'fitAll'
+        ? 'Fitting all artifacts into view'
+        : mode === 'fitPaths'
+          ? `Fitting ${paths?.length ?? 0} artifact(s) into view: ${paths?.join(', ')}`
+          : `Centering on (${x}, ${y}) at zoom ${zoom ?? 1}`
+    return {
+      content: [{ type: 'text', text: details }],
+    }
+  },
+)
+
 async function main() {
   const transport = new StdioServerTransport()
   await server.connect(transport)

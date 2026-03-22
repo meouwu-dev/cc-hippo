@@ -96,6 +96,9 @@ export const chatStream = createServerFn({ method: 'POST' })
       `  - "derives" when one artifact is derived from another`,
       `  - "extends" when one artifact extends another`,
       `- Use moveArtifact to rearrange existing artifacts when the user asks to reorganize the canvas.`,
+      `- Use setViewport to pan/zoom the canvas so the user can see artifacts you're creating or modifying. Call it after placing artifacts. It only takes effect if the user hasn't moved the canvas recently (~3s idle).`,
+      `  - After generating multiple artifacts, call setViewport with mode "fitAll" so the user sees everything at once.`,
+      `  - After generating or updating a single artifact, use mode "fitPaths" with that artifact's path.`,
       `- ALWAYS save artifacts and create links — this is how the canvas knows your artifacts' metadata and relationships.`,
       ``,
       `ASKING THE USER QUESTIONS:`,
@@ -148,7 +151,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       '--mcp-config',
       mcpConfigPath,
       '--allowedTools',
-      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__askUser mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage mcp__seal__moveArtifact mcp__seal__calcPosition',
+      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__askUser mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage mcp__seal__moveArtifact mcp__seal__calcPosition mcp__seal__setViewport',
     ]
 
     if (isFirstMessage) {
@@ -323,6 +326,19 @@ export const chatStream = createServerFn({ method: 'POST' })
                 path: input.path,
                 x: Number(input.x),
                 y: Number(input.y),
+              })
+            }
+            // Intercept setViewport MCP tool to emit viewport change event
+            if (block.name === 'mcp__seal__setViewport' && input) {
+              send({
+                type: 'setViewport',
+                mode: input.mode ?? 'fitAll',
+                paths: input.paths,
+                x: input.x !== undefined ? Number(input.x) : undefined,
+                y: input.y !== undefined ? Number(input.y) : undefined,
+                zoom: input.zoom !== undefined ? Number(input.zoom) : undefined,
+                padding:
+                  input.padding !== undefined ? Number(input.padding) : 80,
               })
             }
             // Intercept renamePage MCP tool to emit page rename event

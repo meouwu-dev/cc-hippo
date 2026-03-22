@@ -156,6 +156,17 @@ function CanvasApp({
   const moveArtifactRef = useRef<
     ((path: string, x: number, y: number) => void) | undefined
   >(undefined)
+  const setViewportRef = useRef<
+    | ((data: {
+        mode: string
+        paths?: string[]
+        x?: number
+        y?: number
+        zoom?: number
+        padding?: number
+      }) => void)
+    | undefined
+  >(undefined)
 
   // Stable wrappers that delegate to the current page's callbacks
   const onFileCreated = useCallback((file: ArtifactFile) => {
@@ -179,6 +190,19 @@ function CanvasApp({
   const onMoveArtifact = useCallback((path: string, x: number, y: number) => {
     moveArtifactRef.current?.(path, x, y)
   }, [])
+  const onSetViewport = useCallback(
+    (data: {
+      mode: string
+      paths?: string[]
+      x?: number
+      y?: number
+      zoom?: number
+      padding?: number
+    }) => {
+      setViewportRef.current?.(data)
+    },
+    [],
+  )
   const onSwitchPage = useCallback(
     (pageId: string) => {
       setCurrentPageId(pageId)
@@ -225,6 +249,7 @@ function CanvasApp({
     onRenamePage,
     onDevicePreset,
     onMoveArtifact,
+    onSetViewport,
   })
 
   // Wrap sendMessage to inject current page context (like IDE file context)
@@ -597,6 +622,7 @@ function CanvasApp({
           startNewRowRef={startNewRowRef}
           devicePresetRef={devicePresetRef}
           moveArtifactRef={moveArtifactRef}
+          setViewportRef={setViewportRef}
           messages={messages}
           isStreaming={isStreaming}
           status={status}
@@ -652,6 +678,17 @@ interface CanvasPageProps {
   moveArtifactRef: React.RefObject<
     ((path: string, x: number, y: number) => void) | undefined
   >
+  setViewportRef: React.RefObject<
+    | ((data: {
+        mode: string
+        paths?: string[]
+        x?: number
+        y?: number
+        zoom?: number
+        padding?: number
+      }) => void)
+    | undefined
+  >
   messages: ReturnType<typeof useChat>['messages']
   isStreaming: boolean
   status: ReturnType<typeof useChat>['status']
@@ -685,6 +722,7 @@ function CanvasPage({
   startNewRowRef,
   devicePresetRef,
   moveArtifactRef,
+  setViewportRef,
   messages,
   isStreaming,
   status,
@@ -725,7 +763,16 @@ function CanvasPage({
     moveArtifactByPath,
     savedViewport,
   } = useCanvasNodes(projectId, pageId, viewportInfoRef)
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
+
   const { setCenter, getViewport, setViewport } = useReactFlow()
+
+  // Track last user interaction with canvas for idle detection
+  const lastUserInteractionRef = useRef<number>(0)
+  const IDLE_THRESHOLD = 3000 // 3 seconds
+  // Track whether canvas was empty when streaming started (skip idle check if so)
+  const canvasEmptyAtStreamStartRef = useRef(false)
 
   // Restore saved viewport when page data loads
   const hasRestoredRef = useRef(false)
@@ -755,6 +802,7 @@ function CanvasPage({
       height: window.innerHeight / vp.zoom,
       zoom: vp.zoom,
     }
+    lastUserInteractionRef.current = Date.now()
     if (viewportSaveTimer.current) clearTimeout(viewportSaveTimer.current)
     viewportSaveTimer.current = setTimeout(() => {
       savePageViewportFn({ data: { pageId, x: vp.x, y: vp.y, zoom: vp.zoom } })
@@ -781,10 +829,63 @@ function CanvasPage({
       const sectionName = dir || 'Generated Files'
       openArtifactBatch(files, sectionName)
     }
-    startNewRowRef.current = () => startNewRow()
+    startNewRowRef.current = () => {
+      canvasEmptyAtStreamStartRef.current =
+        nodesRef.current.filter((n) => n.type === 'artifact').length === 0
+      startNewRow()
+    }
     devicePresetRef.current = (path, preset) =>
       setDevicePresetByPath(path, preset as DevicePreset)
     moveArtifactRef.current = (path, x, y) => moveArtifactByPath(path, x, y)
+    setViewportRef.current = (data) => {
+      const idleTime = Date.now() - lastUserInteractionRef.current
+      const isIdle = idleTime >= IDLE_THRESHOLD || canvasEmptyAtStreamStartRef.current
+      if (!isIdle) return // User recently moved canvas and page wasn't empty, skip
+      const pad = data.padding ?? 80
+
+      if (data.mode === 'center' && data.x !== undefined && data.y !== undefined) {
+        const z = data.zoom ?? 1
+        const vpX = -data.x * z + window.innerWidth / 2
+        const vpY = -data.y * z + window.innerHeight / 2
+        setViewport({ x: vpX, y: vpY, zoom: z }, { duration: 500 })
+        return
+      }
+
+      // For fitAll / fitPaths, compute bounding box from current nodes
+      let targetNodes = nodesRef.current.filter((n) => n.type === 'artifact')
+
+      if (data.mode === 'fitPaths' && data.paths?.length) {
+        const pathSet = new Set(data.paths.map((p) => `artifact-${p}`))
+        targetNodes = targetNodes.filter((n) => pathSet.has(n.id))
+      }
+
+      if (targetNodes.length === 0) return
+
+      // Compute bounding box
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (const n of targetNodes) {
+        const w = (n.style?.width as number) || 480
+        const h = (n.style?.height as number) || 400
+        minX = Math.min(minX, n.position.x)
+        minY = Math.min(minY, n.position.y)
+        maxX = Math.max(maxX, n.position.x + w)
+        maxY = Math.max(maxY, n.position.y + h)
+      }
+
+      const bboxW = maxX - minX
+      const bboxH = maxY - minY
+      const chatPanelW = 420 // chat panel width + margin
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const availW = vw - chatPanelW
+      const z = Math.min(1, availW / (bboxW + pad * 2), vh / (bboxH + pad * 2))
+      const cx = minX + bboxW / 2
+      const cy = minY + bboxH / 2
+      // Shift center rightward to account for chat panel
+      const vpX = -cx * z + chatPanelW + availW / 2
+      const vpY = -cy * z + vh / 2
+      setViewport({ x: vpX, y: vpY, zoom: z }, { duration: 500 })
+    }
     return () => {
       fileCreatedRef.current = undefined
       edgeCreatedRef.current = undefined
@@ -792,6 +893,7 @@ function CanvasPage({
       startNewRowRef.current = undefined
       devicePresetRef.current = undefined
       moveArtifactRef.current = undefined
+      setViewportRef.current = undefined
     }
   }, [
     fileCreatedRef,
@@ -807,6 +909,8 @@ function CanvasPage({
     markNodeStreaming,
     setDevicePresetByPath,
     moveArtifactByPath,
+    setViewportRef,
+    setViewport,
   ])
 
   // Clear streaming indicators when AI finishes

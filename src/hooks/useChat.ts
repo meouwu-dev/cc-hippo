@@ -63,6 +63,14 @@ interface UseChatOptions {
   onRenamePage?: (pageId: string, name: string) => void
   onDevicePreset?: (path: string, preset: string) => void
   onMoveArtifact?: (path: string, x: number, y: number) => void
+  onSetViewport?: (data: {
+    mode: string
+    paths?: string[]
+    x?: number
+    y?: number
+    zoom?: number
+    padding?: number
+  }) => void
 }
 
 export function useChat({
@@ -76,6 +84,7 @@ export function useChat({
   onRenamePage,
   onDevicePreset,
   onMoveArtifact,
+  onSetViewport,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -103,6 +112,8 @@ export function useChat({
   onDevicePresetRef.current = onDevicePreset
   const onMoveArtifactRef = useRef(onMoveArtifact)
   onMoveArtifactRef.current = onMoveArtifact
+  const onSetViewportRef = useRef(onSetViewport)
+  onSetViewportRef.current = onSetViewport
 
   // Load from SQLite on mount / conversation switch
   useEffect(() => {
@@ -372,6 +383,17 @@ export function useChat({
                   data.x as number,
                   data.y as number,
                 )
+              }
+
+              if (data.type === 'setViewport') {
+                onSetViewportRef.current?.({
+                  mode: data.mode as string,
+                  paths: data.paths as string[] | undefined,
+                  x: data.x as number | undefined,
+                  y: data.y as number | undefined,
+                  zoom: data.zoom as number | undefined,
+                  padding: data.padding as number | undefined,
+                })
               }
 
               if (data.type === 'usage') {
