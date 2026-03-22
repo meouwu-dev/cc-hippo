@@ -304,6 +304,14 @@ export function useCanvasNodes(
   // Where the next node should be placed (flow coordinates)
   const nextPosRef = useRef<{ x: number; y: number } | null>(null)
 
+  // Pre-planned layout from AI (saveArtifact called before Write)
+  const plannedLayoutRef = useRef<
+    Map<
+      string,
+      { x?: number; y?: number; devicePreset?: DevicePreset }
+    >
+  >(new Map())
+
   const startNewRow = useCallback(() => {
     const allArtifacts = nodesRef.current.filter(
       (n) => n.type === 'artifact' && !n.parentId,
@@ -401,11 +409,23 @@ export function useCanvasNodes(
         })
       }
 
+      // Check for pre-planned layout from AI (saveArtifact called before Write)
+      const planned = plannedLayoutRef.current.get(file.path)
+      const nodeSize = planned?.devicePreset
+        ? getDeviceNodeSize(planned.devicePreset)
+        : { width: NODE_W, height: NODE_H }
+
       // Compute position for the new node
       let x: number
       let y: number
 
-      if (nextPosRef.current) {
+      if (planned?.x !== undefined && planned?.y !== undefined) {
+        // Use AI-planned position
+        x = planned.x
+        y = planned.y
+        // Clear the plan so it's not reused
+        plannedLayoutRef.current.delete(file.path)
+      } else if (nextPosRef.current) {
         // Use the position set by startNewRow
         x = nextPosRef.current.x
         y = nextPosRef.current.y
@@ -446,8 +466,9 @@ export function useCanvasNodes(
           file,
           label: file.filename,
           artifactId: '', // will be populated when DB row exists
+          devicePreset: planned?.devicePreset,
         } satisfies ArtifactNodeData,
-        style: { width: NODE_W, height: NODE_H },
+        style: { width: nodeSize.width, height: nodeSize.height },
       }
 
       // Upsert artifact to DB so it survives refresh even before MCP saveArtifact
@@ -459,8 +480,8 @@ export function useCanvasNodes(
           content: file.content,
           x,
           y,
-          w: NODE_W,
-          h: NODE_H,
+          w: nodeSize.width,
+          h: nodeSize.height,
         },
       })
 
@@ -684,9 +705,44 @@ export function useCanvasNodes(
   const setDevicePresetByPath = useCallback(
     (path: string, preset: DevicePreset) => {
       const nodeId = `artifact-${path}`
+      // Check if node exists yet
+      const exists = nodesRef.current.some((n) => n.id === nodeId)
+      if (!exists) {
+        // Buffer into planned layout for when the node spawns
+        const existing = plannedLayoutRef.current.get(path) || {}
+        plannedLayoutRef.current.set(path, { ...existing, devicePreset: preset })
+        return
+      }
       setDevicePreset(nodeId, preset)
     },
     [setDevicePreset],
+  )
+
+  const moveArtifactByPath = useCallback(
+    (artifactPath: string, x: number, y: number) => {
+      const nodeId = `artifact-${artifactPath}`
+      // Check if node exists yet
+      const exists = nodesRef.current.some((n) => n.id === nodeId)
+      if (!exists) {
+        // Buffer into planned layout for when the node spawns
+        const existing = plannedLayoutRef.current.get(artifactPath) || {}
+        plannedLayoutRef.current.set(artifactPath, { ...existing, x, y })
+        return
+      }
+      setNodes((prev) =>
+        prev.map((n) => {
+          if (n.id !== nodeId) return n
+          const d = n.data as ArtifactNodeData
+          const w = (n.style?.width as number) || NODE_W
+          const h = (n.style?.height as number) || NODE_H
+          if (d.artifactId) {
+            debouncedSavePosition(d.artifactId, x, y, w, h)
+          }
+          return { ...n, position: { x, y } }
+        }),
+      )
+    },
+    [],
   )
 
   const clearCanvas = useCallback(() => {
@@ -708,6 +764,7 @@ export function useCanvasNodes(
     closeSection,
     clearCanvas,
     setDevicePresetByPath,
+    moveArtifactByPath,
     savedViewport,
   }
 }

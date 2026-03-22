@@ -62,6 +62,7 @@ interface UseChatOptions {
   onSwitchPage?: (pageId: string) => void
   onRenamePage?: (pageId: string, name: string) => void
   onDevicePreset?: (path: string, preset: string) => void
+  onMoveArtifact?: (path: string, x: number, y: number) => void
 }
 
 export function useChat({
@@ -74,6 +75,7 @@ export function useChat({
   onSwitchPage,
   onRenamePage,
   onDevicePreset,
+  onMoveArtifact,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -99,6 +101,8 @@ export function useChat({
   onRenamePageRef.current = onRenamePage
   const onDevicePresetRef = useRef(onDevicePreset)
   onDevicePresetRef.current = onDevicePreset
+  const onMoveArtifactRef = useRef(onMoveArtifact)
+  onMoveArtifactRef.current = onMoveArtifact
 
   // Load from SQLite on mount / conversation switch
   useEffect(() => {
@@ -359,6 +363,14 @@ export function useChat({
                 onDevicePresetRef.current?.(
                   data.path as string,
                   data.preset as string,
+                )
+              }
+
+              if (data.type === 'moveArtifact') {
+                onMoveArtifactRef.current?.(
+                  data.path as string,
+                  data.x as number,
+                  data.y as number,
                 )
               }
 

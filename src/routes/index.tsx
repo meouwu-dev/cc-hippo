@@ -153,6 +153,9 @@ function CanvasApp({
   const devicePresetRef = useRef<
     ((path: string, preset: string) => void) | undefined
   >(undefined)
+  const moveArtifactRef = useRef<
+    ((path: string, x: number, y: number) => void) | undefined
+  >(undefined)
 
   // Stable wrappers that delegate to the current page's callbacks
   const onFileCreated = useCallback((file: ArtifactFile) => {
@@ -172,6 +175,9 @@ function CanvasApp({
   }, [])
   const onDevicePreset = useCallback((path: string, preset: string) => {
     devicePresetRef.current?.(path, preset)
+  }, [])
+  const onMoveArtifact = useCallback((path: string, x: number, y: number) => {
+    moveArtifactRef.current?.(path, x, y)
   }, [])
   const onSwitchPage = useCallback(
     (pageId: string) => {
@@ -218,6 +224,7 @@ function CanvasApp({
     onSwitchPage,
     onRenamePage,
     onDevicePreset,
+    onMoveArtifact,
   })
 
   // Wrap sendMessage to inject current page context (like IDE file context)
@@ -589,6 +596,7 @@ function CanvasApp({
           batchCreatedRef={batchCreatedRef}
           startNewRowRef={startNewRowRef}
           devicePresetRef={devicePresetRef}
+          moveArtifactRef={moveArtifactRef}
           messages={messages}
           isStreaming={isStreaming}
           status={status}
@@ -641,6 +649,9 @@ interface CanvasPageProps {
   devicePresetRef: React.RefObject<
     ((path: string, preset: string) => void) | undefined
   >
+  moveArtifactRef: React.RefObject<
+    ((path: string, x: number, y: number) => void) | undefined
+  >
   messages: ReturnType<typeof useChat>['messages']
   isStreaming: boolean
   status: ReturnType<typeof useChat>['status']
@@ -673,6 +684,7 @@ function CanvasPage({
   batchCreatedRef,
   startNewRowRef,
   devicePresetRef,
+  moveArtifactRef,
   messages,
   isStreaming,
   status,
@@ -708,6 +720,7 @@ function CanvasPage({
     startNewRow,
     toggleMinimizeArtifact,
     setDevicePresetByPath,
+    moveArtifactByPath,
     savedViewport,
   } = useCanvasNodes(projectId, pageId, viewportInfoRef)
   const { setCenter, getViewport, setViewport } = useReactFlow()
@@ -766,12 +779,14 @@ function CanvasPage({
     startNewRowRef.current = () => startNewRow()
     devicePresetRef.current = (path, preset) =>
       setDevicePresetByPath(path, preset as DevicePreset)
+    moveArtifactRef.current = (path, x, y) => moveArtifactByPath(path, x, y)
     return () => {
       fileCreatedRef.current = undefined
       edgeCreatedRef.current = undefined
       batchCreatedRef.current = undefined
       startNewRowRef.current = undefined
       devicePresetRef.current = undefined
+      moveArtifactRef.current = undefined
     }
   }, [
     fileCreatedRef,
@@ -779,11 +794,13 @@ function CanvasPage({
     batchCreatedRef,
     startNewRowRef,
     devicePresetRef,
+    moveArtifactRef,
     openArtifact,
     addEdge,
     openArtifactBatch,
     startNewRow,
     setDevicePresetByPath,
+    moveArtifactByPath,
   ])
 
   // Listen for close-artifact events from nodes

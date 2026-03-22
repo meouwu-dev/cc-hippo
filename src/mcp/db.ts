@@ -265,20 +265,24 @@ export function upsertArtifact(
   pageId?: string | null,
   sectionId?: string | null,
   devicePreset?: string | null,
+  posX?: number | null,
+  posY?: number | null,
 ) {
   const db = getDb()
   // If no pageId provided, use the default page
   const resolvedPageId = pageId ?? ensureDefaultPage(projectId).id
   db.prepare(
-    `INSERT INTO artifacts (id, project_id, page_id, path, filename, content, type, section_id, device_preset)
-     VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO artifacts (id, project_id, page_id, path, filename, content, type, section_id, device_preset, position_x, position_y)
+     VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(project_id, path) DO UPDATE SET
        filename = excluded.filename,
-       content = excluded.content,
+       content = CASE WHEN excluded.content = '' THEN content ELSE excluded.content END,
        type = excluded.type,
        page_id = COALESCE(excluded.page_id, page_id),
        section_id = COALESCE(excluded.section_id, section_id),
        device_preset = COALESCE(excluded.device_preset, device_preset),
+       position_x = CASE WHEN excluded.position_x != 0 THEN excluded.position_x ELSE position_x END,
+       position_y = CASE WHEN excluded.position_y != 0 THEN excluded.position_y ELSE position_y END,
        updated_at = datetime('now')`,
   ).run(
     projectId,
@@ -289,6 +293,8 @@ export function upsertArtifact(
     type,
     sectionId ?? null,
     devicePreset ?? null,
+    posX ?? 0,
+    posY ?? 0,
   )
 }
 

@@ -71,23 +71,32 @@ export const chatStream = createServerFn({ method: 'POST' })
       `  - Don't create a new page for every single screen — group by feature area`,
       ``,
       `ARTIFACT & RELATIONSHIP TRACKING (MCP tools):`,
-      `- After writing each file, call saveArtifact to register it with its type and pageId:`,
-      `  - "requirement" for requirement docs, specs, or constraints`,
-      `  - "design" for design documents, style guides, or design specs`,
-      `  - "preview" for HTML preview files`,
-      `  - "component" for reusable components`,
-      `  - "other" for anything else`,
-      `- When saving HTML preview artifacts, set devicePreset to match the intended viewport:`,
-      `  - "mobile" (390×844) for mobile-first or phone layouts`,
-      `  - "tablet" (768×1024) for tablet layouts`,
-      `  - "desktop" (1440×1024) for full-width desktop layouts`,
-      `- After saving artifacts, call linkArtifacts to declare relationships between them:`,
+      `- CRITICAL WORKFLOW — follow this exact order for each artifact:`,
+      `  1. Call getArtifacts ONCE at the start to see current canvas state`,
+      `  2. Plan ALL positions upfront, accounting for each node's size (see below)`,
+      `  3. For each artifact: call saveArtifact (with type, devicePreset, x, y) FIRST, then Write the file`,
+      `  4. After all files written, call linkArtifacts for relationships`,
+      `- saveArtifact pre-registers position and size BEFORE the node spawns, so the node appears at the correct spot.`,
+      `- saveArtifact fields:`,
+      `  - type: "requirement", "design", "preview", "component", or "other"`,
+      `  - devicePreset: "mobile" (390×844), "tablet" (768×1024), or "desktop" (1440×1024) — sets the node size`,
+      `  - x, y: canvas position — where the node should be placed`,
+      `  - content: optional (can be empty when calling before Write)`,
+      ``,
+      `CANVAS LAYOUT — positioning artifacts:`,
+      `- Use calcPosition to get coordinates — do NOT calculate positions manually.`,
+      `- calcPosition takes: relativeTo (an existing artifact path), placement ("right", "below", "left", "above"), and devicePreset of the new artifact.`,
+      `- For the first artifact: call calcPosition with no relativeTo to get the starting position.`,
+      `- For subsequent artifacts: call calcPosition with relativeTo pointing to an existing artifact.`,
+      `- Pass the returned x, y values to saveArtifact.`,
+      `- Think about logical arrangement: spec above implementation, responsive variants in a row (right), related screens grouped together.`,
+      `- linkArtifacts relationships:`,
       `  - "references" when one doc references another`,
       `  - "implements" when a preview implements a design or requirement`,
       `  - "derives" when one artifact is derived from another`,
       `  - "extends" when one artifact extends another`,
-      `- Call getArtifacts at the start to see what already exists so you can build on previous work.`,
-      `- ALWAYS save artifacts and create links — this is how the canvas shows relationships between your work.`,
+      `- Use moveArtifact to rearrange existing artifacts when the user asks to reorganize the canvas.`,
+      `- ALWAYS save artifacts and create links — this is how the canvas knows your artifacts' metadata and relationships.`,
       ``,
       `ASKING THE USER QUESTIONS:`,
       `When you need the user to choose between alternatives, call the askUser MCP tool.`,
@@ -139,7 +148,7 @@ export const chatStream = createServerFn({ method: 'POST' })
       '--mcp-config',
       mcpConfigPath,
       '--allowedTools',
-      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__askUser mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage',
+      'Edit Write Read Glob Grep Bash(mkdir:*) Bash(ls:*) mcp__seal__askUser mcp__seal__saveArtifact mcp__seal__linkArtifacts mcp__seal__getArtifacts mcp__seal__getRelationships mcp__seal__listPages mcp__seal__createPage mcp__seal__renamePage mcp__seal__switchPage mcp__seal__moveArtifact mcp__seal__calcPosition',
     ]
 
     if (isFirstMessage) {
@@ -195,6 +204,10 @@ export const chatStream = createServerFn({ method: 'POST' })
           return `Renaming page to: ${input.name || ''}`
         case 'mcp__seal__switchPage':
           return 'Navigating to page...'
+        case 'mcp__seal__moveArtifact':
+          return `Moving ${input.path || 'artifact'}...`
+        case 'mcp__seal__calcPosition':
+          return 'Calculating position...'
         default:
           return `Using ${name}...`
       }
@@ -281,20 +294,36 @@ export const chatStream = createServerFn({ method: 'POST' })
                 .questions
               send({ type: 'askUser', questions })
             }
-            // Intercept saveArtifact MCP tool to forward devicePreset
-            if (
-              block.name === 'mcp__seal__saveArtifact' &&
-              input?.devicePreset
-            ) {
-              send({
-                type: 'devicePreset',
-                path: input.path,
-                preset: input.devicePreset,
-              })
+            // Intercept saveArtifact MCP tool to forward devicePreset and position
+            if (block.name === 'mcp__seal__saveArtifact' && input) {
+              if (input.devicePreset) {
+                send({
+                  type: 'devicePreset',
+                  path: input.path,
+                  preset: input.devicePreset,
+                })
+              }
+              if (input.x !== undefined && input.y !== undefined) {
+                send({
+                  type: 'moveArtifact',
+                  path: input.path,
+                  x: Number(input.x),
+                  y: Number(input.y),
+                })
+              }
             }
             // Intercept switchPage MCP tool to emit page navigation event
             if (block.name === 'mcp__seal__switchPage' && input?.pageId) {
               send({ type: 'switchPage', pageId: input.pageId })
+            }
+            // Intercept moveArtifact MCP tool to emit move event
+            if (block.name === 'mcp__seal__moveArtifact' && input) {
+              send({
+                type: 'moveArtifact',
+                path: input.path,
+                x: Number(input.x),
+                y: Number(input.y),
+              })
             }
             // Intercept renamePage MCP tool to emit page rename event
             if (block.name === 'mcp__seal__renamePage' && input?.pageId) {

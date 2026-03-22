@@ -9,6 +9,7 @@ import {
   getPages,
   createPage,
   renamePage,
+  updateArtifactPositionByPath,
 } from './db.js'
 
 const projectId = process.env.SEAL_PROJECT_ID || 'default'
@@ -175,13 +176,17 @@ server.registerTool(
   'saveArtifact',
   {
     description:
-      'Save or update an artifact in the database. Call this after writing a file to register its metadata and type. Specify pageId to place the artifact on a specific page — use listPages to find available pages, or createPage to make a new one.',
+      'Pre-register artifact metadata BEFORE writing the file. Sets type, device size, and canvas position so the node spawns at the correct spot. Call this BEFORE the Write tool — the node will appear with the right size and position when the file is written. You can also call it after writing to update metadata.',
     inputSchema: {
       path: z.string().describe('Relative file path (e.g. "requirements.md")'),
       filename: z
         .string()
         .describe('Just the filename (e.g. "requirements.md")'),
-      content: z.string().describe('Full file content'),
+      content: z
+        .string()
+        .optional()
+        .default('')
+        .describe('File content (optional — can be empty if calling before Write)'),
       type: z
         .enum(['requirement', 'design', 'preview', 'component', 'other'])
         .default('other')
@@ -198,9 +203,21 @@ server.registerTool(
         .describe(
           'Device viewport preset for this artifact. Sets the node size on the canvas. Use "desktop" (1440×1024) for full-width layouts, "tablet" (768×1024) for tablet views, "mobile" (390×844) for mobile-first designs.',
         ),
+      x: z
+        .number()
+        .optional()
+        .describe(
+          'X position on canvas (pixels). Start around 500 to clear the chat panel. Use getArtifacts to see existing positions.',
+        ),
+      y: z
+        .number()
+        .optional()
+        .describe(
+          'Y position on canvas (pixels). 0 is top. Leave ~80px gaps between rows.',
+        ),
     },
   },
-  async ({ path, filename, content, type, pageId, devicePreset }) => {
+  async ({ path, filename, content, type, pageId, devicePreset, x, y }) => {
     upsertArtifact(
       projectId,
       path,
@@ -210,6 +227,8 @@ server.registerTool(
       pageId,
       undefined,
       devicePreset,
+      x,
+      y,
     )
     return {
       content: [{ type: 'text', text: `Saved artifact: ${path} (${type})` }],
@@ -262,7 +281,12 @@ server.registerTool(
   },
   async ({ type }) => {
     const artifacts = getAllArtifacts(projectId, type)
-    const summary = artifacts.map((a) => `[${a.type}] ${a.path}`).join('\n')
+    const summary = artifacts
+      .map(
+        (a) =>
+          `[${a.type}] ${a.path} | pos: (${Math.round(a.position_x)}, ${Math.round(a.position_y)}) | size: ${Math.round(a.width)}×${Math.round(a.height)}${a.device_preset ? ` | device: ${a.device_preset}` : ''}`,
+      )
+      .join('\n')
     return {
       content: [
         {
@@ -305,6 +329,144 @@ server.registerTool(
           text: edges.length
             ? `Found ${edges.length} relationship(s):\n${summary}`
             : 'No relationships found.',
+        },
+      ],
+    }
+  },
+)
+
+const DEVICE_SIZES: Record<string, { w: number; h: number }> = {
+  desktop: { w: 1440, h: 1024 },
+  tablet: { w: 768, h: 1024 },
+  mobile: { w: 390, h: 844 },
+}
+const DEFAULT_SIZE = { w: 480, h: 400 }
+const GAP_X = 60
+const GAP_Y = 80
+const START_X = 500
+const START_Y = 80
+
+function getNodeSize(devicePreset?: string) {
+  return (devicePreset && DEVICE_SIZES[devicePreset]) || DEFAULT_SIZE
+}
+
+server.registerTool(
+  'calcPosition',
+  {
+    description:
+      'Calculate canvas position for a new artifact relative to an existing one, or get the starting position if no artifacts exist. Returns { x, y } coordinates. Use this before saveArtifact to get correct coordinates without doing math yourself.',
+    inputSchema: {
+      devicePreset: z
+        .enum(['desktop', 'tablet', 'mobile'])
+        .optional()
+        .describe('Device preset of the NEW artifact being placed'),
+      relativeTo: z
+        .string()
+        .optional()
+        .describe(
+          'Path of an existing artifact to position relative to (e.g. "design.md")',
+        ),
+      placement: z
+        .enum(['right', 'below', 'left', 'above'])
+        .default('below')
+        .describe(
+          'Where to place the new artifact relative to the reference artifact',
+        ),
+    },
+  },
+  async ({ devicePreset, relativeTo, placement }) => {
+    if (!relativeTo) {
+      // No reference — return starting position
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Position: x=${START_X}, y=${START_Y}`,
+          },
+        ],
+      }
+    }
+
+    const artifacts = getAllArtifacts(projectId)
+    const ref = artifacts.find((a) => a.path === relativeTo)
+    if (!ref) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Reference artifact not found: ${relativeTo}. Use x=${START_X}, y=${START_Y}`,
+          },
+        ],
+      }
+    }
+
+    const refSize = getNodeSize(ref.device_preset ?? undefined)
+    const newSize = getNodeSize(devicePreset)
+    let x: number
+    let y: number
+
+    switch (placement) {
+      case 'right':
+        x = ref.position_x + refSize.w + GAP_X
+        y = ref.position_y
+        break
+      case 'left':
+        x = ref.position_x - newSize.w - GAP_X
+        y = ref.position_y
+        break
+      case 'below':
+        x = ref.position_x
+        y = ref.position_y + refSize.h + GAP_Y
+        break
+      case 'above':
+        x = ref.position_x
+        y = ref.position_y - newSize.h - GAP_Y
+        break
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Position: x=${Math.round(x)}, y=${Math.round(y)}`,
+        },
+      ],
+    }
+  },
+)
+
+server.registerTool(
+  'moveArtifact',
+  {
+    description:
+      'Move an artifact to a specific position on the canvas. Use getArtifacts first to see current positions and sizes, then calculate appropriate coordinates. The canvas uses standard screen coordinates: x increases rightward, y increases downward. Leave gaps of ~60px between nodes horizontally and ~80px vertically.',
+    inputSchema: {
+      path: z.string().describe('Artifact path (e.g. "login.html")'),
+      x: z.number().describe('X position on canvas (pixels)'),
+      y: z.number().describe('Y position on canvas (pixels)'),
+    },
+  },
+  async ({ path, x, y }) => {
+    const artifacts = getAllArtifacts(projectId)
+    const artifact = artifacts.find((a) => a.path === path)
+    if (!artifact) {
+      return {
+        content: [{ type: 'text', text: `Artifact not found: ${path}` }],
+      }
+    }
+    updateArtifactPositionByPath(
+      projectId,
+      path,
+      x,
+      y,
+      artifact.width,
+      artifact.height,
+    )
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Moved ${path} to (${x}, ${y})`,
         },
       ],
     }
