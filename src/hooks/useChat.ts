@@ -57,6 +57,8 @@ interface UseChatOptions {
   conversationId: string
   onFileCreated?: (file: ArtifactFile) => void
   onEdgeCreated?: (edge: ArtifactEdge) => void
+  onEdgeRemoved?: (source: string, target: string) => void
+  onEdgeUpdated?: (source: string, target: string, label: string) => void
   onBatchCreated?: (files: ArtifactFile[]) => void
   onStartNewRow?: () => void
   onSwitchPage?: (pageId: string) => void
@@ -78,6 +80,8 @@ export function useChat({
   conversationId,
   onFileCreated,
   onEdgeCreated,
+  onEdgeRemoved,
+  onEdgeUpdated,
   onBatchCreated,
   onStartNewRow,
   onSwitchPage,
@@ -100,6 +104,10 @@ export function useChat({
   onFileCreatedRef.current = onFileCreated
   const onEdgeCreatedRef = useRef(onEdgeCreated)
   onEdgeCreatedRef.current = onEdgeCreated
+  const onEdgeRemovedRef = useRef(onEdgeRemoved)
+  onEdgeRemovedRef.current = onEdgeRemoved
+  const onEdgeUpdatedRef = useRef(onEdgeUpdated)
+  onEdgeUpdatedRef.current = onEdgeUpdated
   const onBatchCreatedRef = useRef(onBatchCreated)
   onBatchCreatedRef.current = onBatchCreated
   const onStartNewRowRef = useRef(onStartNewRow)
@@ -347,6 +355,14 @@ export function useChat({
                   target: data.target,
                   kind: data.kind,
                 })
+              }
+
+              if (data.type === 'removeEdge') {
+                onEdgeRemovedRef.current?.(data.source as string, data.target as string)
+              }
+
+              if (data.type === 'updateEdge') {
+                onEdgeUpdatedRef.current?.(data.source as string, data.target as string, data.label as string)
               }
 
               if (data.type === 'askUser') {

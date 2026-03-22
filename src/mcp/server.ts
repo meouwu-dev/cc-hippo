@@ -10,6 +10,8 @@ import {
   createPage,
   renamePage,
   updateArtifactPositionByPath,
+  deleteEdgeByPath,
+  updateEdgeByPath,
 } from './db.js'
 
 const projectId = process.env.SEAL_PROJECT_ID || 'default'
@@ -240,27 +242,76 @@ server.registerTool(
   'linkArtifacts',
   {
     description:
-      'Create a directional relationship between two artifacts. The edge flows from source (left) to target (right) on the canvas. For "implements": source is the spec/design, target is the implementation. For "derives": source is the original, target is the derivative.',
+      'Create a flow arrow between two screen artifacts showing user navigation. The arrow flows from source to target.',
     inputSchema: {
       source_path: z
         .string()
-        .describe('Path of the source artifact (appears on the left)'),
+        .describe('Path of the source artifact'),
       target_path: z
         .string()
-        .describe('Path of the target artifact (appears on the right)'),
-      kind: z
-        .enum(['references', 'implements', 'derives', 'extends'])
-        .default('references')
-        .describe('Relationship type'),
+        .describe('Path of the target artifact'),
+      label: z
+        .string()
+        .default('')
+        .describe('Short action label for the arrow (e.g. "login", "sign up", "back")'),
     },
   },
-  async ({ source_path, target_path, kind }) => {
-    insertEdgeByPath(projectId, source_path, target_path, kind)
+  async ({ source_path, target_path, label }) => {
+    insertEdgeByPath(projectId, source_path, target_path, label)
     return {
       content: [
         {
           type: 'text',
-          text: `Linked: ${source_path} --${kind}--> ${target_path}`,
+          text: `Linked: ${source_path} --${label || '→'}--> ${target_path}`,
+        },
+      ],
+    }
+  },
+)
+
+server.registerTool(
+  'unlinkArtifacts',
+  {
+    description: 'Remove a flow arrow between two artifacts.',
+    inputSchema: {
+      source_path: z.string().describe('Path of the source artifact'),
+      target_path: z.string().describe('Path of the target artifact'),
+    },
+  },
+  async ({ source_path, target_path }) => {
+    const deleted = deleteEdgeByPath(projectId, source_path, target_path)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: deleted
+            ? `Removed link: ${source_path} → ${target_path}`
+            : `No link found between ${source_path} and ${target_path}`,
+        },
+      ],
+    }
+  },
+)
+
+server.registerTool(
+  'updateLink',
+  {
+    description: 'Update the label on an existing flow arrow between two artifacts.',
+    inputSchema: {
+      source_path: z.string().describe('Path of the source artifact'),
+      target_path: z.string().describe('Path of the target artifact'),
+      label: z.string().describe('New label for the arrow'),
+    },
+  },
+  async ({ source_path, target_path, label }) => {
+    const updated = updateEdgeByPath(projectId, source_path, target_path, label)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: updated
+            ? `Updated link label: ${source_path} --${label}--> ${target_path}`
+            : `No link found between ${source_path} and ${target_path}`,
         },
       ],
     }

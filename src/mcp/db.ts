@@ -449,6 +449,41 @@ export function insertEdgeByPath(
   insertEdge(projectId, source.id, target.id, kind)
 }
 
+export function deleteEdgeByPath(
+  projectId: string,
+  sourcePath: string,
+  targetPath: string,
+) {
+  const source = getArtifactByPath(projectId, sourcePath)
+  const target = getArtifactByPath(projectId, targetPath)
+  if (!source || !target) return false
+  const db = getDb()
+  const result = db
+    .prepare(
+      'DELETE FROM edges WHERE project_id = ? AND source_artifact_id = ? AND target_artifact_id = ?',
+    )
+    .run(projectId, source.id, target.id)
+  return result.changes > 0
+}
+
+export function updateEdgeByPath(
+  projectId: string,
+  sourcePath: string,
+  targetPath: string,
+  kind: string,
+) {
+  const source = getArtifactByPath(projectId, sourcePath)
+  const target = getArtifactByPath(projectId, targetPath)
+  if (!source || !target) return false
+  const db = getDb()
+  const result = db
+    .prepare(
+      'UPDATE edges SET kind = ? WHERE project_id = ? AND source_artifact_id = ? AND target_artifact_id = ?',
+    )
+    .run(kind, projectId, source.id, target.id)
+  return result.changes > 0
+}
+
 export function getEdgesByPage(projectId: string, pageId: string): EdgeRow[] {
   const db = getDb()
   return db

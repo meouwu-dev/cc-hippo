@@ -146,6 +146,12 @@ function CanvasApp({
     | ((edge: { source: string; target: string; kind?: string }) => void)
     | undefined
   >(undefined)
+  const edgeRemovedRef = useRef<
+    ((source: string, target: string) => void) | undefined
+  >(undefined)
+  const edgeUpdatedRef = useRef<
+    ((source: string, target: string, label: string) => void) | undefined
+  >(undefined)
   const batchCreatedRef = useRef<((files: ArtifactFile[]) => void) | undefined>(
     undefined,
   )
@@ -175,6 +181,18 @@ function CanvasApp({
   const onEdgeCreated = useCallback(
     (edge: { source: string; target: string; kind?: string }) => {
       edgeCreatedRef.current?.(edge)
+    },
+    [],
+  )
+  const onEdgeRemoved = useCallback(
+    (source: string, target: string) => {
+      edgeRemovedRef.current?.(source, target)
+    },
+    [],
+  )
+  const onEdgeUpdated = useCallback(
+    (source: string, target: string, label: string) => {
+      edgeUpdatedRef.current?.(source, target, label)
     },
     [],
   )
@@ -243,6 +261,8 @@ function CanvasApp({
     conversationId: currentConversationId ?? '',
     onFileCreated,
     onEdgeCreated,
+    onEdgeRemoved,
+    onEdgeUpdated,
     onBatchCreated,
     onStartNewRow,
     onSwitchPage,
@@ -618,6 +638,8 @@ function CanvasApp({
           pageId={currentPageId}
           fileCreatedRef={fileCreatedRef}
           edgeCreatedRef={edgeCreatedRef}
+          edgeRemovedRef={edgeRemovedRef}
+          edgeUpdatedRef={edgeUpdatedRef}
           batchCreatedRef={batchCreatedRef}
           startNewRowRef={startNewRowRef}
           devicePresetRef={devicePresetRef}
@@ -667,6 +689,12 @@ interface CanvasPageProps {
   edgeCreatedRef: React.RefObject<
     | ((edge: { source: string; target: string; kind?: string }) => void)
     | undefined
+  >
+  edgeRemovedRef: React.RefObject<
+    ((source: string, target: string) => void) | undefined
+  >
+  edgeUpdatedRef: React.RefObject<
+    ((source: string, target: string, label: string) => void) | undefined
   >
   batchCreatedRef: React.RefObject<
     ((files: ArtifactFile[]) => void) | undefined
@@ -718,6 +746,8 @@ function CanvasPage({
   pageId,
   fileCreatedRef,
   edgeCreatedRef,
+  edgeRemovedRef,
+  edgeUpdatedRef,
   batchCreatedRef,
   startNewRowRef,
   devicePresetRef,
@@ -753,6 +783,8 @@ function CanvasPage({
     onEdgesChange,
     onConnect,
     addEdge,
+    removeEdge,
+    updateEdge,
     openArtifact,
     openArtifactBatch,
     startNewRow,
@@ -824,6 +856,10 @@ function CanvasPage({
     }
     edgeCreatedRef.current = (edge) =>
       addEdge(edge.source, edge.target, edge.kind)
+    edgeRemovedRef.current = (source, target) =>
+      removeEdge(source, target)
+    edgeUpdatedRef.current = (source, target, label) =>
+      updateEdge(source, target, label)
     batchCreatedRef.current = (files: ArtifactFile[]) => {
       const dir = files[0]?.path.split('/').slice(0, -1).join('/')
       const sectionName = dir || 'Generated Files'
@@ -889,6 +925,8 @@ function CanvasPage({
     return () => {
       fileCreatedRef.current = undefined
       edgeCreatedRef.current = undefined
+      edgeRemovedRef.current = undefined
+      edgeUpdatedRef.current = undefined
       batchCreatedRef.current = undefined
       startNewRowRef.current = undefined
       devicePresetRef.current = undefined
@@ -898,12 +936,16 @@ function CanvasPage({
   }, [
     fileCreatedRef,
     edgeCreatedRef,
+    edgeRemovedRef,
+    edgeUpdatedRef,
     batchCreatedRef,
     startNewRowRef,
     devicePresetRef,
     moveArtifactRef,
     openArtifact,
     addEdge,
+    removeEdge,
+    updateEdge,
     openArtifactBatch,
     startNewRow,
     markNodeStreaming,

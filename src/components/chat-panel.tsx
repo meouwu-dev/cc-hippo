@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Square,
   ChevronDown,
@@ -666,7 +667,7 @@ export default function ChatPanel({
                       className="group/user flex flex-col items-end"
                     >
                       <div className="max-w-[85%] rounded-2xl rounded-br-sm border border-border px-3 py-2 text-[13px] leading-relaxed text-foreground">
-                        <Markdown>{msg.content}</Markdown>
+                        <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
                       </div>
                       <div className="mt-1 flex items-center gap-0.5">
                         {msg.timestamp && (
@@ -717,7 +718,7 @@ export default function ChatPanel({
                         ) : null}
                         {msg.content?.trim() && (
                           <div className="prose prose-invert break-words text-[13px] leading-relaxed text-foreground">
-                            <Markdown>{msg.content}</Markdown>
+                            <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
                           </div>
                         )}
                         {msg.artifacts?.map((file) => (

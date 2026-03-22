@@ -40,18 +40,10 @@ export interface ArtifactNodeData extends Record<string, unknown> {
   streaming?: boolean
 }
 
-const EDGE_COLORS: Record<string, string> = {
-  references: '#888',
-  implements: '#818cf8',
-  derives: '#f59e0b',
-  extends: '#10b981',
-}
-
-function getEdgeStyle(kind?: string) {
-  const color = (kind && EDGE_COLORS[kind]) || '#666'
+function getEdgeStyle() {
   return {
-    style: { stroke: color, strokeWidth: 2 },
-    labelStyle: { fill: color, fontSize: 10 },
+    style: { stroke: '#888', strokeWidth: 2 },
+    labelStyle: { fill: '#888', fontSize: 10 },
   }
 }
 
@@ -111,13 +103,13 @@ function edgeRowToEdge(e: EdgeRow, artifacts: ArtifactRow[]): Edge | null {
   if (!source || !target) return null
   const sourceId = `artifact-${source.path}`
   const targetId = `artifact-${target.path}`
-  const edgeStyle = getEdgeStyle(e.kind)
+  const edgeStyle = getEdgeStyle()
   return {
     id: `e-${sourceId}-${targetId}`,
     source: sourceId,
     target: targetId,
     label: e.kind || undefined,
-    animated: e.kind === 'implements',
+    animated: false,
     ...edgeStyle,
   }
 }
@@ -280,17 +272,45 @@ export function useCanvasNodes(
         if (prev.some((e) => e.source === sourceId && e.target === targetId)) {
           return prev
         }
-        const edgeStyle = getEdgeStyle(kind)
+        const edgeStyle = getEdgeStyle()
         const edge: Edge = {
           id: `e-${sourceId}-${targetId}`,
           source: sourceId,
           target: targetId,
           label: kind || undefined,
-          animated: kind === 'implements',
+          animated: false,
           ...edgeStyle,
         }
         return [...prev, edge]
       })
+    },
+    [],
+  )
+
+  const removeEdge = useCallback(
+    (sourcePath: string, targetPath: string) => {
+      const sourceId = `artifact-${sourcePath}`
+      const targetId = `artifact-${targetPath}`
+      setEdges((prev) =>
+        prev.filter(
+          (e) => !(e.source === sourceId && e.target === targetId),
+        ),
+      )
+    },
+    [],
+  )
+
+  const updateEdge = useCallback(
+    (sourcePath: string, targetPath: string, label: string) => {
+      const sourceId = `artifact-${sourcePath}`
+      const targetId = `artifact-${targetPath}`
+      setEdges((prev) =>
+        prev.map((e) =>
+          e.source === sourceId && e.target === targetId
+            ? { ...e, label: label || undefined }
+            : e,
+        ),
+      )
     },
     [],
   )
@@ -788,6 +808,8 @@ export function useCanvasNodes(
     onEdgesChange,
     onConnect,
     addEdge,
+    removeEdge,
+    updateEdge,
     openArtifact,
     openArtifactBatch,
     startNewRow,

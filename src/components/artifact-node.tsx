@@ -1,6 +1,7 @@
 import { memo, useMemo, useCallback } from 'react'
 import { NodeResizer, Handle, Position } from '@xyflow/react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Minus,
   Maximize2,
@@ -235,7 +236,29 @@ function ArtifactNodeInner({
               />
             ) : ext === 'md' ? (
               <div className="prose prose-invert p-3 text-[13px] leading-relaxed text-foreground">
-                <Markdown>{file.content}</Markdown>
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ children }) {
+                      const text = String(children).trim()
+                      const hexMatch = /^#([0-9a-fA-F]{3,8})$/.exec(text)
+                      if (hexMatch) {
+                        return (
+                          <code className="inline-flex items-center gap-1">
+                            <span
+                              className="inline-block size-3 rounded-sm border border-white/20"
+                              style={{ backgroundColor: text }}
+                            />
+                            {text}
+                          </code>
+                        )
+                      }
+                      return <code>{children}</code>
+                    },
+                  }}
+                >
+                  {file.content}
+                </Markdown>
               </div>
             ) : (
               <pre className="m-0 overflow-auto whitespace-pre p-3 font-mono text-xs leading-relaxed text-foreground">
