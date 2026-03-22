@@ -31,7 +31,7 @@ function ArtifactNodeInner({
   id,
 }: NodeProps & { data: ArtifactNodeData }) {
   const { file, devicePreset, minimized } = data
-  const ext = file.filename.split('.').pop()?.toLowerCase() || ''
+  const ext = (file.path || file.filename).split('.').pop()?.toLowerCase() || ''
 
   const handleSetDevice = useCallback(
     (preset: DevicePreset | undefined) => {
