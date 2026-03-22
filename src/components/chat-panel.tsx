@@ -361,9 +361,9 @@ function InfoBar({
   }
 
   return (
-    <div className="flex items-center gap-x-3 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+    <div className="flex min-h-0 items-center gap-x-3 rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
       {usage && (
-        <>
+        <span className="flex shrink-0 items-center gap-x-3">
           {usage.duration_ms > 0 && (
             <span>{formatDuration(usage.duration_ms)}</span>
           )}
@@ -378,10 +378,13 @@ function InfoBar({
               {formatTokens(usage.cache_read_tokens)} cached
             </span>
           )}
-        </>
+        </span>
       )}
       {showStatus && statusLabel && (
-        <span className="ml-auto flex min-w-0 items-center gap-1.5">
+        <span
+          className="ml-auto flex min-w-0 items-center gap-1.5"
+          title={statusLabel}
+        >
           {statusIcon}
           <span className="truncate">{statusLabel}</span>
         </span>
