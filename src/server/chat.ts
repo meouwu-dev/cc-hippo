@@ -350,7 +350,15 @@ export const chatStream = createServerFn({ method: 'POST' })
                   content,
                 })
               } else if (block.name === 'Edit') {
-                const existing = fileContents.get(relativePath) || ''
+                let existing = fileContents.get(relativePath)
+                if (existing === undefined) {
+                  // File was created in a previous request — read from disk
+                  try {
+                    existing = fs.readFileSync(input.file_path, 'utf-8')
+                  } catch {
+                    existing = ''
+                  }
+                }
                 const oldStr = input.old_string || ''
                 const newStr = input.new_string || ''
                 const updated = existing.replace(oldStr, newStr)
