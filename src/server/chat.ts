@@ -5,6 +5,7 @@ interface ChatInput {
   isFirstMessage: boolean
   model?: string
   effort?: string
+  streaming?: boolean
   projectId: string
   conversationId: string
   currentPageId?: string
@@ -40,9 +41,9 @@ export const chatStream = createServerFn({ method: 'POST' })
     // Ensure output dir exists for this project (persisted across messages)
     fs.mkdirSync(outputDir, { recursive: true })
 
-    const { message, isFirstMessage, model, effort } = data
+    const { message, isFirstMessage, model, effort, streaming } = data
     console.log(
-      `[chat] Request: model=${model || 'default'}, effort=${effort || 'default'}, first=${isFirstMessage}, msg="${message.slice(0, 80)}..."`,
+      `[chat] Request: model=${model || 'default'}, effort=${effort || 'default'}, streaming=${!!streaming}, first=${isFirstMessage}, msg="${message.slice(0, 80)}..."`,
     )
 
     const sessionId = getOrCreateSessionId(data.conversationId)
@@ -235,6 +236,7 @@ export const chatStream = createServerFn({ method: 'POST' })
     }
     args.push('--add-dir', outputDir)
 
+    if (streaming) args.push('--include-partial-messages')
     if (model && model !== 'default') args.push('--model', model)
     if (effort && effort !== 'default') args.push('--effort', effort)
 
@@ -296,10 +298,116 @@ export const chatStream = createServerFn({ method: 'POST' })
     // Track processed tool_use block IDs to avoid duplicate SSE events
     const processedToolIds = new Set<string>()
 
+    // Streaming mode: track in-progress tool_use blocks from content_block_delta
+    const streamingBlocks = new Map<
+      number,
+      { id: string; name: string; partialJson: string }
+    >()
+    // Throttle file-streaming SSE to avoid flooding the client
+    const lastStreamSent = new Map<string, number>()
+
     const handleClaudeEvent = (
       event: Record<string, unknown>,
       send: (data: Record<string, unknown>) => void,
     ) => {
+      // Handle streaming partial messages (--include-partial-messages mode)
+      if (event.type === 'stream_event') {
+        const inner = event.event as Record<string, unknown>
+        console.log(`[chat] stream_event: ${inner.type}`)
+
+        if (inner.type === 'content_block_start') {
+          const block = inner.content_block as Record<string, unknown>
+          if (block.type === 'tool_use') {
+            streamingBlocks.set(inner.index as number, {
+              id: block.id as string,
+              name: block.name as string,
+              partialJson: '',
+            })
+          }
+        }
+
+        if (inner.type === 'content_block_delta') {
+          const delta = inner.delta as Record<string, unknown>
+          const idx = inner.index as number
+          const block = streamingBlocks.get(idx)
+          if (block && delta.type === 'input_json_delta') {
+            block.partialJson += delta.partial_json as string
+
+            // For Write tool_use, try to extract partial content and stream it
+            if (block.name === 'Write') {
+              // Throttle to ~100ms between sends
+              const now = Date.now()
+              const lastSent = lastStreamSent.get(block.id) || 0
+              if (now - lastSent < 100) return
+
+              // Try to extract file_path and partial content from incomplete JSON
+              const fpMatch = block.partialJson.match(
+                /"file_path"\s*:\s*"([^"]*?)"/,
+              )
+              if (fpMatch) {
+                const filePath = fpMatch[1]
+                if (filePath.startsWith(outputDir)) {
+                  // Extract content after "content": " — grab everything after it
+                  const contentStart = block.partialJson.indexOf(
+                    '"content"',
+                  )
+                  if (contentStart !== -1) {
+                    // Find the opening quote of the content value
+                    const valueStart = block.partialJson.indexOf(
+                      '"',
+                      contentStart + 9,
+                    )
+                    if (valueStart !== -1) {
+                      // Grab raw JSON string content (may be unterminated)
+                      const rawContent = block.partialJson.slice(
+                        valueStart + 1,
+                      )
+                      // Unescape JSON string escapes
+                      let content: string
+                      try {
+                        content = JSON.parse('"' + rawContent + '"')
+                      } catch {
+                        // Incomplete escape at end — trim last char and retry
+                        try {
+                          content = JSON.parse(
+                            '"' + rawContent.slice(0, -1) + '"',
+                          )
+                        } catch {
+                          content = rawContent
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\"/g, '"')
+                            .replace(/\\\\/g, '\\')
+                        }
+                      }
+
+                      const relativePath = path.relative(outputDir, filePath)
+                      const filename = path.basename(filePath)
+                      lastStreamSent.set(block.id, now)
+                      console.log(
+                        `[chat] file-streaming: ${relativePath} (${content.length} chars)`,
+                      )
+                      send({
+                        type: 'file-streaming',
+                        path: relativePath,
+                        filename,
+                        content,
+                      })
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (inner.type === 'content_block_stop') {
+          streamingBlocks.delete(inner.index as number)
+        }
+
+        return
+      }
+
       if (event.type === 'result') {
         send({
           type: 'usage',

@@ -39,6 +39,7 @@ export interface ArtifactNodeData extends Record<string, unknown> {
   preMinimizeHeight?: number
   streaming?: boolean
   pending?: boolean
+  liveMode?: boolean
 }
 
 function getEdgeStyle() {
@@ -625,6 +626,7 @@ export function useCanvasNodes(
       devicePreset?: DevicePreset
       x: number
       y: number
+      liveMode?: boolean
     }) => {
       setNodes((prev) => {
         // Don't spawn if node already exists
@@ -650,6 +652,7 @@ export function useCanvasNodes(
             artifactId: '',
             devicePreset: info.devicePreset,
             pending: true,
+            liveMode: info.liveMode,
           } satisfies ArtifactNodeData,
           style: { width: nodeSize.width, height: nodeSize.height },
         }
@@ -811,6 +814,28 @@ export function useCanvasNodes(
     [],
   )
 
+  // Lightweight content update for streaming — no DB writes
+  const updateArtifactContent = useCallback((file: ArtifactFile) => {
+    setNodes((prev) => {
+      const exists = prev.some(
+        (n) =>
+          n.type === 'artifact' &&
+          (n.data as ArtifactNodeData).file.path === file.path,
+      )
+      if (!exists) return prev
+      return prev.map((n) => {
+        if (
+          n.type === 'artifact' &&
+          (n.data as ArtifactNodeData).file.path === file.path
+        ) {
+          const d = n.data as ArtifactNodeData
+          return { ...n, data: { ...d, file, streaming: true, pending: false } }
+        }
+        return n
+      })
+    })
+  }, [])
+
   const markNodeStreaming = useCallback((path: string) => {
     setNodes((prev) =>
       prev.map((n) => {
@@ -862,6 +887,7 @@ export function useCanvasNodes(
     toggleMinimizeArtifact,
     closeSection,
     clearCanvas,
+    updateArtifactContent,
     markNodeStreaming,
     clearAllStreaming,
     setDevicePresetByPath,

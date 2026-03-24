@@ -73,8 +73,10 @@ interface ChatPanelProps {
   usage: UsageInfo | null
   onSend: (
     text: string,
-    opts: { model?: string; effort?: string; references?: string[] },
+    opts: { model?: string; effort?: string; streaming?: boolean; references?: string[] },
   ) => void
+  streaming: boolean
+  onStreamingChange: (streaming: boolean) => void
   onStop: () => void
   onArtifactClick: (file: ArtifactFile) => void
   pendingQuestions: UserQuestion[] | null
@@ -415,6 +417,8 @@ export default function ChatPanel({
   pendingQuestions,
   dismissQuestions,
   onRetry,
+  streaming,
+  onStreamingChange,
   selectedNodes = [],
   onClearSelection,
   onDeselectNode,
@@ -474,6 +478,7 @@ export default function ChatPanel({
     onSend(text, {
       model: model === 'default' ? undefined : model,
       effort: effort === 'default' ? undefined : effort,
+      streaming: streaming || undefined,
       references: refs.length > 0 ? refs : undefined,
     })
   }
@@ -742,6 +747,7 @@ export default function ChatPanel({
                       onSend(response, {
                         model: model || undefined,
                         effort: effort || undefined,
+                        streaming: streaming || undefined,
                       })
                     }
                     onDismiss={dismissQuestions}
@@ -834,6 +840,31 @@ export default function ChatPanel({
               </SelectContent>
             </Select>
           </div>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={() => onStreamingChange(!streaming)}
+                  className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors ${
+                    streaming
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                />
+              }
+            >
+              <span
+                className={`inline-block size-1.5 rounded-full ${streaming ? 'bg-primary animate-pulse' : 'bg-muted-foreground'}`}
+              />
+              <span>Live</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {streaming
+                ? 'Live preview: file content streams as AI writes'
+                : 'Normal: file content appears when complete'}
+            </TooltipContent>
+          </Tooltip>
           <Button
             variant={isStreaming ? 'destructive' : 'outline'}
             size="icon-sm"

@@ -174,9 +174,16 @@ function CanvasApp({
     | undefined
   >(undefined)
 
+  const fileStreamingRef = useRef<
+    ((file: ArtifactFile) => void) | undefined
+  >(undefined)
+
   // Stable wrappers that delegate to the current page's callbacks
   const onFileCreated = useCallback((file: ArtifactFile) => {
     fileCreatedRef.current?.(file)
+  }, [])
+  const onFileStreaming = useCallback((file: ArtifactFile) => {
+    fileStreamingRef.current?.(file)
   }, [])
   const onEdgeCreated = useCallback(
     (edge: { source: string; target: string; kind?: string }) => {
@@ -300,13 +307,14 @@ function CanvasApp({
     onMoveArtifact,
     onPendingArtifact,
     onSetViewport,
+    onFileStreaming,
   })
 
   // Wrap sendMessage to inject current page context (like IDE file context)
   const sendMessage = useCallback(
     (
       text: string,
-      opts: { model?: string; effort?: string; references?: string[] } = {},
+      opts: { model?: string; effort?: string; streaming?: boolean; references?: string[] } = {},
     ) => {
       const currentPage = pages.find((p) => p.id === currentPageId)
       return rawSendMessage(text, {
@@ -667,6 +675,7 @@ function CanvasApp({
           projectId={projectId}
           pageId={currentPageId}
           fileCreatedRef={fileCreatedRef}
+          fileStreamingRef={fileStreamingRef}
           edgeCreatedRef={edgeCreatedRef}
           edgeRemovedRef={edgeRemovedRef}
           edgeUpdatedRef={edgeUpdatedRef}
@@ -717,6 +726,7 @@ interface CanvasPageProps {
   projectId: string
   pageId: string
   fileCreatedRef: React.RefObject<((file: ArtifactFile) => void) | undefined>
+  fileStreamingRef: React.RefObject<((file: ArtifactFile) => void) | undefined>
   edgeCreatedRef: React.RefObject<
     | ((edge: { source: string; target: string; kind?: string }) => void)
     | undefined
@@ -786,6 +796,7 @@ function CanvasPage({
   projectId,
   pageId,
   fileCreatedRef,
+  fileStreamingRef,
   edgeCreatedRef,
   edgeRemovedRef,
   edgeUpdatedRef,
@@ -817,6 +828,7 @@ function CanvasPage({
   onRetry,
 }: CanvasPageProps) {
   const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
+  const [liveStreaming, setLiveStreaming] = useState(true)
   const viewportInfoRef = useRef<ViewportInfo | null>(null)
   const {
     nodes,
@@ -832,6 +844,7 @@ function CanvasPage({
     spawnPendingNode,
     startNewRow,
     toggleMinimizeArtifact,
+    updateArtifactContent,
     markNodeStreaming,
     clearAllStreaming,
     setDevicePresetByPath,
@@ -897,6 +910,9 @@ function CanvasPage({
       openArtifact(file)
       markNodeStreaming(file.path)
     }
+    fileStreamingRef.current = (file: ArtifactFile) => {
+      updateArtifactContent(file)
+    }
     edgeCreatedRef.current = (edge) =>
       addEdge(edge.source, edge.target, edge.kind)
     edgeRemovedRef.current = (source, target) =>
@@ -920,6 +936,7 @@ function CanvasPage({
       spawnPendingNode({
         ...info,
         devicePreset: info.devicePreset as DevicePreset | undefined,
+        liveMode: liveStreaming,
       })
     setViewportRef.current = (data) => {
       const idleTime = Date.now() - lastUserInteractionRef.current
@@ -972,6 +989,7 @@ function CanvasPage({
     }
     return () => {
       fileCreatedRef.current = undefined
+      fileStreamingRef.current = undefined
       edgeCreatedRef.current = undefined
       edgeRemovedRef.current = undefined
       edgeUpdatedRef.current = undefined
@@ -984,6 +1002,7 @@ function CanvasPage({
     }
   }, [
     fileCreatedRef,
+    fileStreamingRef,
     edgeCreatedRef,
     edgeRemovedRef,
     edgeUpdatedRef,
@@ -993,6 +1012,7 @@ function CanvasPage({
     moveArtifactRef,
     pendingArtifactRef,
     openArtifact,
+    updateArtifactContent,
     addEdge,
     removeEdge,
     updateEdge,
@@ -1004,6 +1024,7 @@ function CanvasPage({
     moveArtifactByPath,
     setViewportRef,
     setViewport,
+    liveStreaming,
   ])
 
   // Clear streaming indicators when AI finishes
@@ -1096,6 +1117,8 @@ function CanvasPage({
           pendingQuestions={pendingQuestions}
           dismissQuestions={dismissQuestions}
           onRetry={onRetry}
+          streaming={liveStreaming}
+          onStreamingChange={setLiveStreaming}
           selectedNodes={selectedNodes}
           onClearSelection={() => setSelectedNodes([])}
           onDeselectNode={(nodeId) =>

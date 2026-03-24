@@ -81,6 +81,7 @@ interface UseChatOptions {
     zoom?: number
     padding?: number
   }) => void
+  onFileStreaming?: (file: ArtifactFile) => void
 }
 
 export function useChat({
@@ -99,6 +100,7 @@ export function useChat({
   onMoveArtifact,
   onPendingArtifact,
   onSetViewport,
+  onFileStreaming,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -136,6 +138,8 @@ export function useChat({
   onPendingArtifactRef.current = onPendingArtifact
   const onSetViewportRef = useRef(onSetViewport)
   onSetViewportRef.current = onSetViewport
+  const onFileStreamingRef = useRef(onFileStreaming)
+  onFileStreamingRef.current = onFileStreaming
 
   // Load from SQLite on mount / conversation switch
   useEffect(() => {
@@ -204,6 +208,7 @@ export function useChat({
       opts: {
         model?: string
         effort?: string
+        streaming?: boolean
         currentPageId?: string
         currentPageName?: string
         references?: string[]
@@ -249,6 +254,7 @@ export function useChat({
             isFirstMessage,
             model: opts.model,
             effort: opts.effort,
+            streaming: opts.streaming,
             projectId,
             conversationId,
             currentPageId: opts.currentPageId,
@@ -361,6 +367,23 @@ export function useChat({
                   return next
                 })
                 onFileCreatedRef.current?.(file)
+              }
+
+              if (data.type === 'file-streaming') {
+                const file: ArtifactFile = {
+                  path: data.path,
+                  filename: data.filename,
+                  version: Date.now(),
+                  content: data.content || '',
+                }
+                // Update artifacts state for live preview
+                setArtifacts((prev) => {
+                  const exists = prev.some((a) => a.path === file.path)
+                  return exists
+                    ? prev.map((a) => (a.path === file.path ? file : a))
+                    : [...prev, file]
+                })
+                onFileStreamingRef.current?.(file)
               }
 
               if (data.type === 'edge') {
